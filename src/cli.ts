@@ -178,6 +178,13 @@ cli.command('send', {
     }),
 })
 
-await cli.serve()
+async function main() {
+  await cli.serve()
+}
+
+main().catch((error) => {
+  console.error(error instanceof Error ? error.message : String(error))
+  process.exitCode = 1
+})
 
 export default cli

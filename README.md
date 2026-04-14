@@ -28,9 +28,11 @@ pnpm install
 
 ```bash
 pnpm dev -- setup
+pnpm dev -- auth
+pnpm dev -- whoami
 ```
 
-This writes your Telegram API credentials into a small user-scoped config file. mtcute keeps session and cache state in its own user-scoped SQLite storage file.
+`auth` is the explicit interactive login step. Other commands require an existing local Telegram session and will tell you to run `telegram auth` first if you have not logged in yet.
 
 ## Usage
 

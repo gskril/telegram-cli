@@ -17,6 +17,7 @@
     "dev": "node --import tsx/esm src/cli.ts",
     "check": "tsc --noEmit -p tsconfig.json"
   },
+  "packageManager": "pnpm@10.15.1",
   "engines": {
     "node": ">=20"
   },

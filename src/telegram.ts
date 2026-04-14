@@ -2,7 +2,6 @@ import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import readline from 'node:readline/promises'
-import { Writable } from 'node:stream'
 
 import dotenv from 'dotenv'
 import { TelegramClient, type InputPeerLike, type Peer } from '@mtcute/node'
@@ -146,7 +145,16 @@ async function loginInteractive(tg: TelegramClient) {
   })
 }
 
-export async function getClient(options?: {
+async function requireStoredSession(tg: TelegramClient): Promise<void> {
+  await tg.prepare()
+  const self = await tg.storage.self.fetch()
+
+  if (!self) {
+    throw new Error('No Telegram session found. Run "telegram auth" first.')
+  }
+}
+
+export async function authClient(options?: {
   forceLogin?: boolean
 }): Promise<TelegramClient> {
   if (options?.forceLogin && client) {
@@ -176,35 +184,54 @@ export async function getClient(options?: {
   }
 }
 
+export async function getClient(): Promise<TelegramClient> {
+  if (client) return client
+
+  const tg = await createClient()
+
+  try {
+    await requireStoredSession(tg)
+    client = tg
+    return tg
+  } catch (error) {
+    await tg.destroy().catch(() => undefined)
+    throw error
+  }
+}
+
 function redactApiHash(apiHash: string): string {
   if (apiHash.length <= 8) return '********'
   return `${apiHash.slice(0, 4)}…${apiHash.slice(-4)}`
 }
 
-async function prompt(question: string, options?: { hidden?: boolean }): Promise<string> {
-  let muted = options?.hidden === true
-  const output = new Writable({
-    write(chunk, encoding, callback) {
-      if (!muted) process.stdout.write(chunk, encoding as BufferEncoding)
-      callback()
-    },
-  })
-
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output,
-    terminal: true,
-  })
+async function promptWithInterface(
+  rl: readline.Interface,
+  question: string,
+  options?: { hidden?: boolean },
+): Promise<string> {
+  const originalWrite = (rl as readline.Interface & {
+    _writeToOutput?: (chunk: string) => void
+  })._writeToOutput
 
   try {
-    muted = false
-    process.stdout.write(question)
-    muted = options?.hidden === true
-    const answer = (await rl.question('')).trim()
+    if (options?.hidden) {
+      ;(rl as readline.Interface & {
+        _writeToOutput?: (chunk: string) => void
+      })._writeToOutput = function writeMuted(chunk: string) {
+        // Preserve the prompt text, but suppress echoed answer characters.
+        if (chunk.includes(question)) {
+          process.stdout.write(chunk)
+        }
+      }
+    }
+
+    const answer = (await rl.question(question)).trim()
     if (options?.hidden) process.stdout.write('\n')
     return answer
   } finally {
-    rl.close()
+    ;(rl as readline.Interface & {
+      _writeToOutput?: (chunk: string) => void
+    })._writeToOutput = originalWrite
   }
 }
 
@@ -221,8 +248,24 @@ export async function setupConfig(options?: { force?: boolean }) {
     }
   }
 
-  const enteredApiId = await prompt('Telegram API ID: ')
-  const enteredApiHash = await prompt('Telegram API hash: ', { hidden: true })
+  console.error('Create Telegram API credentials at https://my.telegram.org/apps')
+  console.error('If you have not created an app yet, create one there and copy the API ID and API hash.\n')
+
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    terminal: true,
+  })
+
+  let enteredApiId = ''
+  let enteredApiHash = ''
+
+  try {
+    enteredApiId = await promptWithInterface(rl, 'Telegram API ID: ')
+    enteredApiHash = await promptWithInterface(rl, 'Telegram API hash: ', { hidden: true })
+  } finally {
+    rl.close()
+  }
 
   if (!/^\d+$/.test(enteredApiId)) {
     throw new Error('Telegram API ID must be numeric.')
@@ -249,7 +292,7 @@ export async function setupConfig(options?: { force?: boolean }) {
 }
 
 export async function auth(options?: { force?: boolean }) {
-  const tg = await getClient({ forceLogin: options?.force })
+  const tg = await authClient({ forceLogin: options?.force })
   const me = await tg.getMe()
 
   return {
