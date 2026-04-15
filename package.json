@@ -14,28 +14,32 @@
     "README.md"
   ],
   "bin": {
-    "telegram": "./dist/cli.js"
+    "telegram": "./dist/cli.mjs"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsdown",
     "dev": "node --import tsx/esm src/cli.ts",
     "check": "tsc --noEmit -p tsconfig.json",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "prepack": "pnpm build",
+    "pack:check": "npm --cache .npm-cache pack --json"
   },
   "packageManager": "pnpm@10.15.1",
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
-    "@mtcute/node": "^0.29.6",
-    "dotenv": "^17.4.2",
-    "incur": "^0.3.25",
-    "zod": "^4.3.6"
+    "better-sqlite3": "^12.9.0"
   },
   "devDependencies": {
+    "@mtcute/node": "^0.29.6",
     "@types/node": "^25.6.0",
+    "dotenv": "^17.4.2",
+    "incur": "^0.3.25",
     "prettier": "^3.8.3",
+    "tsdown": "^0.21.8",
     "tsx": "^4.21.0",
-    "typescript": "^6.0.2"
+    "typescript": "^6.0.2",
+    "zod": "^4.3.6"
   }
 }

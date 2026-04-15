@@ -4,7 +4,19 @@ import path from 'node:path'
 import readline from 'node:readline/promises'
 
 import dotenv from 'dotenv'
-import { TelegramClient, type InputPeerLike, type Peer } from '@mtcute/node'
+import { BaseTelegramClient, type InputPeerLike, type Peer } from '@mtcute/node'
+import {
+  getChat,
+  getMe,
+  getUser,
+  iterDialogs,
+  iterHistory,
+  logOut,
+  readHistory,
+  saveDraft,
+  sendText,
+  start,
+} from '@mtcute/node/methods.js'
 
 dotenv.config({ quiet: true })
 
@@ -15,7 +27,7 @@ const STATE_DIR = resolveStateDir()
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json')
 const STORAGE_FILE = path.join(STATE_DIR, 'telegram.session')
 
-let client: TelegramClient | null = null
+let client: BaseTelegramClient | null = null
 const NEGATIVE_CHAT_ID_PREFIX = 'tg-chat-id:'
 
 type StoredConfig = {
@@ -138,32 +150,46 @@ async function getCredentials() {
   return { apiId: parsedApiId, apiHash }
 }
 
-async function createClient(): Promise<TelegramClient> {
+async function createClient(): Promise<BaseTelegramClient> {
   const { apiId, apiHash } = await getCredentials()
   await ensureStorageDir()
 
-  return new TelegramClient({
+  return new BaseTelegramClient({
     apiId,
     apiHash,
     storage: STORAGE_FILE,
   })
 }
 
-async function loginInteractive(tg: TelegramClient) {
-  return tg.start({
-    phone: () => tg.input('Phone number (include country code): '),
-    code: () => tg.input('Login code: '),
-    password: () => tg.input('2FA password (leave blank if none): '),
-    invalidCodeCallback: async (type) => {
-      console.error(`Invalid ${type}. Try again.`)
-    },
-    codeSentCallback: async (sentCode) => {
-      console.error(`Code sent via ${sentCode.type}.`)
-    },
+async function loginInteractive(tg: BaseTelegramClient) {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    terminal: true,
   })
+
+  try {
+    return await start(tg, {
+      phone: () =>
+        promptWithInterface(rl, 'Phone number (include country code): '),
+      code: () => promptWithInterface(rl, 'Login code: '),
+      password: () =>
+        promptWithInterface(rl, '2FA password (leave blank if none): ', {
+          hidden: true,
+        }),
+      invalidCodeCallback: async (type) => {
+        console.error(`Invalid ${type}. Try again.`)
+      },
+      codeSentCallback: async (sentCode) => {
+        console.error(`Code sent via ${sentCode.type}.`)
+      },
+    })
+  } finally {
+    rl.close()
+  }
 }
 
-async function requireStoredSession(tg: TelegramClient): Promise<void> {
+async function requireStoredSession(tg: BaseTelegramClient): Promise<void> {
   await tg.prepare()
   const self = await tg.storage.self.fetch()
 
@@ -174,7 +200,7 @@ async function requireStoredSession(tg: TelegramClient): Promise<void> {
 
 export async function authClient(options?: {
   forceLogin?: boolean
-}): Promise<TelegramClient> {
+}): Promise<BaseTelegramClient> {
   if (options?.forceLogin && client) {
     await client.destroy().catch(() => undefined)
     client = null
@@ -187,7 +213,7 @@ export async function authClient(options?: {
   try {
     if (options?.forceLogin) {
       try {
-        await tg.logOut()
+        await logOut(tg)
       } catch {
         // Ignore if no active session is present.
       }
@@ -202,7 +228,7 @@ export async function authClient(options?: {
   }
 }
 
-export async function getClient(): Promise<TelegramClient> {
+export async function getClient(): Promise<BaseTelegramClient> {
   if (client) return client
 
   const tg = await createClient()
@@ -323,7 +349,7 @@ export async function setupConfig(options?: { force?: boolean }) {
 
 export async function auth(options?: { force?: boolean }) {
   const tg = await authClient({ forceLogin: options?.force })
-  const me = await tg.getMe()
+  const me = await getMe(tg)
 
   return {
     authenticated: true,
@@ -339,7 +365,7 @@ export async function logout() {
   const tg = client ?? (await createClient())
 
   try {
-    await tg.logOut()
+    await logOut(tg)
   } catch {
     // Ignore missing session or network cleanup issues.
   } finally {
@@ -375,7 +401,7 @@ export async function resolvePeer(chat: string): Promise<ResolvedPeer> {
   const parsed = parseChatId(chat)
 
   if (typeof parsed === 'number') {
-    for await (const dialog of tg.iterDialogs({ limit: 200 })) {
+    for await (const dialog of iterDialogs(tg, { limit: 200 })) {
       if (dialog.peer.id === parsed) {
         return {
           id: dialog.peer.id,
@@ -389,7 +415,7 @@ export async function resolvePeer(chat: string): Promise<ResolvedPeer> {
 
   if (typeof parsed === 'number' && parsed > 0) {
     try {
-      const user = await tg.getUser(parsed)
+      const user = await getUser(tg, parsed)
       return {
         id: user.id,
         displayName: user.displayName,
@@ -401,7 +427,7 @@ export async function resolvePeer(chat: string): Promise<ResolvedPeer> {
     }
   }
 
-  const peer = await tg.getChat(parsed)
+  const peer = await getChat(tg, parsed)
   return {
     id: peer.id,
     displayName: peer.displayName,
@@ -412,7 +438,7 @@ export async function resolvePeer(chat: string): Promise<ResolvedPeer> {
 
 export async function whoAmI() {
   const tg = await getClient()
-  const me = await tg.getMe()
+  const me = await getMe(tg)
 
   return {
     authenticated: true,
@@ -444,7 +470,9 @@ export async function listChats(options?: {
     lastMessageDate?: string | null
   }> = []
 
-  for await (const dialog of tg.iterDialogs({ limit: options?.limit ?? 20 })) {
+  for await (const dialog of iterDialogs(tg, {
+    limit: options?.limit ?? 20,
+  })) {
     if (options?.unreadOnly && !dialog.isUnread) continue
 
     chats.push({
@@ -480,7 +508,7 @@ export async function readChat(chat: string, options?: { limit?: number }) {
     hasMedia: boolean
   }> = []
 
-  for await (const message of tg.iterHistory(peer.inputPeer, {
+  for await (const message of iterHistory(tg, peer.inputPeer, {
     limit: options?.limit ?? 20,
   })) {
     messages.push({
@@ -513,7 +541,7 @@ export async function unreadChats(options?: {
   messagesLimit?: number
 }) {
   const tg = await getClient()
-  const me = await tg.getMe()
+  const me = await getMe(tg)
   const results: Array<{
     chatId: string
     chatName: string
@@ -530,7 +558,7 @@ export async function unreadChats(options?: {
     }>
   }> = []
 
-  for await (const dialog of tg.iterDialogs({
+  for await (const dialog of iterDialogs(tg, {
     limit: options?.chatsLimit ?? 20,
   })) {
     if (!dialog.isUnread) continue
@@ -544,7 +572,7 @@ export async function unreadChats(options?: {
       hasMedia: boolean
     }> = []
 
-    for await (const message of tg.iterHistory(dialog.peer.inputPeer, {
+    for await (const message of iterHistory(tg, dialog.peer.inputPeer, {
       limit: Math.max(options?.messagesLimit ?? 5, dialog.unreadCount, 5),
     })) {
       const isUnreadMessage =
@@ -587,7 +615,7 @@ export async function markRead(chat: string, options?: { maxId?: number }) {
   const tg = await getClient()
   const peer = await resolvePeer(chat)
 
-  await tg.readHistory(peer.inputPeer, {
+  await readHistory(tg, peer.inputPeer, {
     maxId: options?.maxId,
     clearMentions: true,
   })
@@ -605,7 +633,7 @@ export async function setDraft(chat: string, text: string) {
   const peer = await resolvePeer(chat)
 
   if (text.length === 0) {
-    await tg.saveDraft(peer.inputPeer, null)
+    await saveDraft(tg, peer.inputPeer, null)
     return {
       success: true,
       action: 'cleared',
@@ -614,7 +642,7 @@ export async function setDraft(chat: string, text: string) {
     }
   }
 
-  await tg.saveDraft(peer.inputPeer, { message: text })
+  await saveDraft(tg, peer.inputPeer, { message: text })
 
   return {
     success: true,
@@ -634,7 +662,7 @@ export async function sendMessage(
 ) {
   const tg = await getClient()
   const peer = await resolvePeer(chat)
-  const message = await tg.sendText(peer.inputPeer, text, {
+  const message = await sendText(tg, peer.inputPeer, text, {
     replyTo: options?.replyTo,
   })
 
