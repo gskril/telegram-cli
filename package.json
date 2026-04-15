@@ -29,6 +29,7 @@
     "node": ">=20"
   },
   "dependencies": {
+    "@mtcute/wasm": "^0.29.0",
     "better-sqlite3": "^12.9.0"
   },
   "devDependencies": {
