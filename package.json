@@ -26,7 +26,7 @@
   },
   "packageManager": "pnpm@10.15.1",
   "engines": {
-    "node": ">=20"
+    "node": ">=22.18.0"
   },
   "dependencies": {
     "@mtcute/wasm": "^0.29.0",
