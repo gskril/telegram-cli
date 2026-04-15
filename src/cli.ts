@@ -15,6 +15,9 @@ import {
   whoAmI,
 } from './telegram.js'
 
+const NEGATIVE_CHAT_ID_PREFIX = 'tg-chat-id:'
+const CHAT_ARG_COMMANDS = new Set(['read', 'mark-read', 'draft', 'send'])
+
 const cli = Cli.create('telegram', {
   version: '0.1.0',
   description: 'Telegram CLI for personal account workflows.',
@@ -216,9 +219,31 @@ cli.command('send', {
     }),
 })
 
+function normalizeArgv(argv: string[]): string[] {
+  let normalized = [...argv]
+
+  // `pnpm dev -- ...` forwards a leading separator token into process.argv.
+  if (normalized[0] === '--') normalized = normalized.slice(1)
+
+  const command = normalized[0]
+  if (!command || !CHAT_ARG_COMMANDS.has(command)) return normalized
+
+  const rest = normalized.slice(1)
+
+  // Allow `telegram send -- -100... "hello"` as an escape hatch for agents.
+  if (rest[0] === '--') rest.shift()
+
+  const chat = rest[0]
+  if (chat && /^-\d+$/.test(chat)) {
+    rest[0] = `${NEGATIVE_CHAT_ID_PREFIX}${chat}`
+  }
+
+  return [command, ...rest]
+}
+
 async function main() {
   try {
-    await cli.serve()
+    await cli.serve(normalizeArgv(process.argv.slice(2)))
   } finally {
     await shutdownClient()
   }

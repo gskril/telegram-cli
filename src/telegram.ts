@@ -16,6 +16,7 @@ const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json')
 const STORAGE_FILE = path.join(STATE_DIR, 'telegram.session')
 
 let client: TelegramClient | null = null
+const NEGATIVE_CHAT_ID_PREFIX = 'tg-chat-id:'
 
 type StoredConfig = {
   apiId: string
@@ -362,6 +363,10 @@ export async function shutdownClient() {
 }
 
 function parseChatId(chat: string): string | number {
+  if (chat.startsWith(NEGATIVE_CHAT_ID_PREFIX)) {
+    chat = chat.slice(NEGATIVE_CHAT_ID_PREFIX.length)
+  }
+
   return /^-?\d+$/.test(chat) ? Number.parseInt(chat, 10) : chat
 }
 
