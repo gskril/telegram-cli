@@ -7,6 +7,7 @@ import {
   logout,
   markRead,
   readChat,
+  resolveTarget,
   sendMessage,
   shutdownClient,
   setupConfig,
@@ -17,6 +18,8 @@ import {
 
 const NEGATIVE_CHAT_ID_PREFIX = 'tg-chat-id:'
 const CHAT_ARG_COMMANDS = new Set(['read', 'mark-read', 'draft', 'send'])
+const CHAT_TARGET_DESCRIPTION =
+  'Prefer numeric chat ID from "telegram chats". Usernames like @username work for resolvable chats, but use your numeric ID from "telegram whoami" for Saved Messages/self.'
 
 const cli = Cli.create('telegram', {
   version: '0.1.0',
@@ -105,9 +108,10 @@ cli.command('chats', {
 })
 
 cli.command('read', {
-  description: 'Read recent messages from a chat by numeric ID or username.',
+  description:
+    'Read recent messages from a chat. Prefer numeric chat ID; usernames also work when Telegram can resolve them.',
   args: z.object({
-    chat: z.string().describe('Chat ID or username such as @username'),
+    chat: z.string().describe(CHAT_TARGET_DESCRIPTION),
   }),
   options: z.object({
     limit: z.coerce
@@ -128,6 +132,29 @@ cli.command('read', {
     },
   ],
   run: async (c) => readChat(c.args.chat, { limit: c.options.limit }),
+})
+
+cli.command('resolve', {
+  description:
+    'Resolve a username or chat target to its numeric Telegram ID.',
+  args: z.object({
+    chat: z
+      .string()
+      .describe(
+        'Username, chat ID, or special self target like "me". Example: @username',
+      ),
+  }),
+  examples: [
+    {
+      args: { chat: '@durov' },
+      description: 'Resolve a user by username',
+    },
+    {
+      args: { chat: '500894395' },
+      description: 'Resolve a user by numeric ID',
+    },
+  ],
+  run: async (c) => resolveTarget(c.args.chat),
 })
 
 cli.command('unread', {
@@ -160,7 +187,7 @@ cli.command('unread', {
 cli.command('mark-read', {
   description: 'Mark a chat history as read.',
   args: z.object({
-    chat: z.string().describe('Chat ID or username such as @username'),
+    chat: z.string().describe(CHAT_TARGET_DESCRIPTION),
   }),
   options: z.object({
     maxId: z.coerce
@@ -175,9 +202,9 @@ cli.command('mark-read', {
 
 cli.command('draft', {
   description:
-    'Save a cloud draft for a chat. Pass an empty string to clear it.',
+    'Save a cloud draft for a chat. Prefer numeric chat ID. Pass an empty string to clear it.',
   args: z.object({
-    chat: z.string().describe('Chat ID or username such as @username'),
+    chat: z.string().describe(CHAT_TARGET_DESCRIPTION),
     text: z
       .string()
       .describe('Draft text. Wrap in quotes. Use "" to clear the draft'),
@@ -187,9 +214,9 @@ cli.command('draft', {
 
 cli.command('send', {
   description:
-    'Send a plain-text Telegram message, optionally as a reply. This performs a real write action, so agents should prefer read/draft flows unless they are confident a message should actually be sent.',
+    'Send a plain-text Telegram message, optionally as a reply. Prefer numeric chat ID. This performs a real write action, so agents should prefer read/draft flows unless they are confident a message should actually be sent.',
   args: z.object({
-    chat: z.string().describe('Chat ID or username such as @username'),
+    chat: z.string().describe(CHAT_TARGET_DESCRIPTION),
     text: z
       .string()
       .describe('Message text. Wrap in quotes if it contains spaces'),

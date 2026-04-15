@@ -42,6 +42,15 @@ export type ResolvedPeer = {
   type: Peer['type']
 }
 
+export type ResolvedTarget = {
+  input: string
+  id: string
+  displayName: string
+  peerType: string
+  username: string | null
+  isSelf: boolean | null
+}
+
 function resolveConfigDir(): string {
   if (process.platform === 'darwin') {
     return path.join(os.homedir(), 'Library', 'Application Support', APP_NAME)
@@ -396,6 +405,10 @@ function parseChatId(chat: string): string | number {
   return /^-?\d+$/.test(chat) ? Number.parseInt(chat, 10) : chat
 }
 
+function normalizeUsername(value: string): string {
+  return value.startsWith('@') ? value.slice(1) : value
+}
+
 export async function resolvePeer(chat: string): Promise<ResolvedPeer> {
   const tg = await getClient()
   const parsed = parseChatId(chat)
@@ -427,12 +440,28 @@ export async function resolvePeer(chat: string): Promise<ResolvedPeer> {
     }
   }
 
-  const peer = await getChat(tg, parsed)
-  return {
-    id: peer.id,
-    displayName: peer.displayName,
-    inputPeer: peer.inputPeer,
-    type: peer.type,
+  try {
+    const peer = await getChat(tg, parsed)
+    return {
+      id: peer.id,
+      displayName: peer.displayName,
+      inputPeer: peer.inputPeer,
+      type: peer.type,
+    }
+  } catch (error) {
+    if (typeof parsed === 'string') {
+      const me = await getMe(tg)
+      const normalizedChat = normalizeUsername(parsed)
+      const normalizedMe = me.username ? normalizeUsername(me.username) : null
+
+      if (normalizedMe && normalizedChat === normalizedMe) {
+        throw new Error(
+          `Provided identifier "${chat}" is your account username, not your Saved Messages chat. Use your numeric ID ${me.id} from "telegram whoami" instead.`,
+        )
+      }
+    }
+
+    throw error
   }
 }
 
@@ -450,6 +479,37 @@ export async function whoAmI() {
     configFile: CONFIG_FILE,
     storageFile: STORAGE_FILE,
     dataDir: STATE_DIR,
+  }
+}
+
+export async function resolveTarget(chat: string): Promise<ResolvedTarget> {
+  const tg = await getClient()
+  const parsed = parseChatId(chat)
+
+  if (typeof parsed === 'string' || (typeof parsed === 'number' && parsed > 0)) {
+    try {
+      const user = await getUser(tg, parsed)
+      return {
+        input: chat,
+        id: String(user.id),
+        displayName: user.displayName,
+        peerType: user.type,
+        username: user.username ?? null,
+        isSelf: user.isSelf,
+      }
+    } catch {
+      // Fall through to chat resolution.
+    }
+  }
+
+  const peer = await getChat(tg, parsed)
+  return {
+    input: chat,
+    id: String(peer.id),
+    displayName: peer.displayName,
+    peerType: peer.chatType,
+    username: peer.username ?? null,
+    isSelf: null,
   }
 }
 

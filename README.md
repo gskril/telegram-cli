@@ -74,15 +74,19 @@ pnpm dev -- setup
 pnpm dev -- auth
 pnpm dev -- whoami
 pnpm dev -- chats --unread-only
+pnpm dev -- resolve @username
 pnpm dev -- read @username --limit 10
-pnpm dev -- draft @username "I will reply later"
-pnpm dev -- draft @username ""
-pnpm dev -- send @username "hello there" --reply-to 42
+pnpm dev -- draft 500894395 "I will reply later"
+pnpm dev -- draft 500894395 ""
+pnpm dev -- send 500894395 "hello there" --reply-to 42
 ```
 
 ## Notes
 
 - This CLI targets a personal Telegram account, not bot-token auth.
+- Use `telegram resolve @username` to look up a numeric user or chat ID before write actions.
+- Prefer numeric chat IDs from `telegram chats` for `read`, `draft`, `send`, and `mark-read`.
+- For your own Saved Messages/self chat, use your numeric ID from `telegram whoami`; your account username may not resolve as a writable chat target.
 - Telegram API credentials are stored in a user-scoped config file.
 - Telegram session and cache state are stored in a user-scoped SQLite file managed by mtcute.
 - Environment variables still work and override the stored credentials, so `.env` remains available for advanced or CI-style usage.
