@@ -35,10 +35,16 @@ function resolveConfigDir(): string {
   }
 
   if (process.platform === 'win32') {
-    return path.join(process.env.APPDATA ?? path.join(os.homedir(), 'AppData', 'Roaming'), APP_NAME)
+    return path.join(
+      process.env.APPDATA ?? path.join(os.homedir(), 'AppData', 'Roaming'),
+      APP_NAME,
+    )
   }
 
-  return path.join(process.env.XDG_CONFIG_HOME ?? path.join(os.homedir(), '.config'), APP_NAME)
+  return path.join(
+    process.env.XDG_CONFIG_HOME ?? path.join(os.homedir(), '.config'),
+    APP_NAME,
+  )
 }
 
 function resolveStateDir(): string {
@@ -46,12 +52,17 @@ function resolveStateDir(): string {
 
   if (process.platform === 'win32') {
     return path.join(
-      process.env.LOCALAPPDATA ?? process.env.APPDATA ?? path.join(os.homedir(), 'AppData', 'Local'),
+      process.env.LOCALAPPDATA ??
+        process.env.APPDATA ??
+        path.join(os.homedir(), 'AppData', 'Local'),
       APP_NAME,
     )
   }
 
-  return path.join(process.env.XDG_STATE_HOME ?? path.join(os.homedir(), '.local', 'state'), APP_NAME)
+  return path.join(
+    process.env.XDG_STATE_HOME ?? path.join(os.homedir(), '.local', 'state'),
+    APP_NAME,
+  )
 }
 
 export function getDataDir(): string {
@@ -70,7 +81,10 @@ async function ensureDir(dir: string): Promise<void> {
   await mkdir(dir, { recursive: true })
 }
 
-async function writeSecureFile(filePath: string, contents: string): Promise<void> {
+async function writeSecureFile(
+  filePath: string,
+  contents: string,
+): Promise<void> {
   await ensureDir(path.dirname(filePath))
   await writeFile(filePath, contents, { encoding: 'utf8', mode: 0o600 })
   await chmod(filePath, 0o600).catch(() => undefined)
@@ -85,7 +99,8 @@ async function readConfigFile(): Promise<StoredConfig | undefined> {
     const raw = await readFile(CONFIG_FILE, 'utf8')
     const parsed = JSON.parse(raw) as Partial<StoredConfig>
 
-    if (typeof parsed.apiId !== 'string' || typeof parsed.apiHash !== 'string') return undefined
+    if (typeof parsed.apiId !== 'string' || typeof parsed.apiHash !== 'string')
+      return undefined
 
     return {
       apiId: parsed.apiId,
@@ -95,7 +110,9 @@ async function readConfigFile(): Promise<StoredConfig | undefined> {
     const code = (error as NodeJS.ErrnoException).code
     if (code === 'ENOENT') return undefined
     if (error instanceof SyntaxError) {
-      throw new Error(`Invalid JSON in ${CONFIG_FILE}. Run "telegram setup --force" to rewrite it.`)
+      throw new Error(
+        `Invalid JSON in ${CONFIG_FILE}. Run "telegram setup --force" to rewrite it.`,
+      )
     }
     throw error
   }
@@ -209,15 +226,19 @@ async function promptWithInterface(
   question: string,
   options?: { hidden?: boolean },
 ): Promise<string> {
-  const originalWrite = (rl as readline.Interface & {
-    _writeToOutput?: (chunk: string) => void
-  })._writeToOutput
+  const originalWrite = (
+    rl as readline.Interface & {
+      _writeToOutput?: (chunk: string) => void
+    }
+  )._writeToOutput
 
   try {
     if (options?.hidden) {
-      ;(rl as readline.Interface & {
-        _writeToOutput?: (chunk: string) => void
-      })._writeToOutput = function writeMuted(chunk: string) {
+      ;(
+        rl as readline.Interface & {
+          _writeToOutput?: (chunk: string) => void
+        }
+      )._writeToOutput = function writeMuted(chunk: string) {
         // Preserve the prompt text, but suppress echoed answer characters.
         if (chunk.includes(question)) {
           process.stdout.write(chunk)
@@ -229,9 +250,11 @@ async function promptWithInterface(
     if (options?.hidden) process.stdout.write('\n')
     return answer
   } finally {
-    ;(rl as readline.Interface & {
-      _writeToOutput?: (chunk: string) => void
-    })._writeToOutput = originalWrite
+    ;(
+      rl as readline.Interface & {
+        _writeToOutput?: (chunk: string) => void
+      }
+    )._writeToOutput = originalWrite
   }
 }
 
@@ -248,8 +271,12 @@ export async function setupConfig(options?: { force?: boolean }) {
     }
   }
 
-  console.error('Create Telegram API credentials at https://my.telegram.org/apps')
-  console.error('If you have not created an app yet, create one there and copy the API ID and API hash.\n')
+  console.error(
+    'Create Telegram API credentials at https://my.telegram.org/apps',
+  )
+  console.error(
+    'If you have not created an app yet, create one there and copy the API ID and API hash.\n',
+  )
 
   const rl = readline.createInterface({
     input: process.stdin,
@@ -262,7 +289,9 @@ export async function setupConfig(options?: { force?: boolean }) {
 
   try {
     enteredApiId = await promptWithInterface(rl, 'Telegram API ID: ')
-    enteredApiHash = await promptWithInterface(rl, 'Telegram API hash: ', { hidden: true })
+    enteredApiHash = await promptWithInterface(rl, 'Telegram API hash: ', {
+      hidden: true,
+    })
   } finally {
     rl.close()
   }
@@ -322,6 +351,14 @@ export async function logout() {
     configFile: CONFIG_FILE,
     storageFile: STORAGE_FILE,
   }
+}
+
+export async function shutdownClient() {
+  if (!client) return
+
+  const tg = client
+  client = null
+  await tg.destroy().catch(() => undefined)
 }
 
 function parseChatId(chat: string): string | number {
@@ -488,7 +525,9 @@ export async function unreadChats(options?: {
     }>
   }> = []
 
-  for await (const dialog of tg.iterDialogs({ limit: options?.chatsLimit ?? 20 })) {
+  for await (const dialog of tg.iterDialogs({
+    limit: options?.chatsLimit ?? 20,
+  })) {
     if (!dialog.isUnread) continue
 
     const unreadMessages: Array<{
@@ -543,7 +582,10 @@ export async function markRead(chat: string, options?: { maxId?: number }) {
   const tg = await getClient()
   const peer = await resolvePeer(chat)
 
-  await tg.readHistory(peer.inputPeer, { maxId: options?.maxId, clearMentions: true })
+  await tg.readHistory(peer.inputPeer, {
+    maxId: options?.maxId,
+    clearMentions: true,
+  })
 
   return {
     success: true,
@@ -578,9 +620,13 @@ export async function setDraft(chat: string, text: string) {
   }
 }
 
-export async function sendMessage(chat: string, text: string, options?: {
-  replyTo?: number
-}) {
+export async function sendMessage(
+  chat: string,
+  text: string,
+  options?: {
+    replyTo?: number
+  },
+) {
   const tg = await getClient()
   const peer = await resolvePeer(chat)
   const message = await tg.sendText(peer.inputPeer, text, {
