@@ -1,6 +1,16 @@
 # telegram
 
+[![pkg.pr.new](https://pkg.pr.new/badge/gskril/telegram-cli)](https://pkg.pr.new/~/gskril/telegram-cli)
+
 Small personal-account Telegram CLI built with TypeScript, `pnpm`, [`incur`](https://github.com/wevm/incur), and [`mtcute`](https://mtcute.dev).
+
+## Preview Install
+
+Try the latest preview build from `pkg.pr.new` without waiting for a full npm release:
+
+```bash
+npx https://pkg.pr.new/gskril/telegram-cli/telegram@main
+```
 
 ## Commands
 
