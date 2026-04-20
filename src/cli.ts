@@ -3,6 +3,7 @@ import { Cli, z } from 'incur'
 
 import {
   auth,
+  listContacts,
   listChats,
   logout,
   markRead,
@@ -105,6 +106,37 @@ cli.command('chats', {
       limit: c.options.limit,
       unreadOnly: c.options.unreadOnly,
     }),
+})
+
+cli.command('contacts', {
+  description: 'Search Telegram contacts live by name, username, or phone.',
+  args: z.object({
+    query: z
+      .string()
+      .describe('Contact search query, like "slobo" or "@superslobo"'),
+  }),
+  options: z.object({
+    limit: z.coerce
+      .number()
+      .min(1)
+      .max(100)
+      .default(20)
+      .describe('Maximum contacts to return'),
+  }),
+  alias: {
+    limit: 'l',
+  },
+  examples: [
+    {
+      args: { query: 'slobo' },
+      description: 'Search contacts by nickname or display name fragment',
+    },
+    {
+      args: { query: '@superslobo' },
+      description: 'Search contacts by username',
+    },
+  ],
+  run: async (c) => listContacts(c.args.query, { limit: c.options.limit }),
 })
 
 cli.command('read', {
