@@ -20,11 +20,14 @@ npx https://pkg.pr.new/gskril/telegram-cli/telegram@main
 - `logout`: clear the active local session
 - `chats`: list recent dialogs
 - `contacts <query>`: search Telegram contacts live by name, username, or phone
+- `resolve <chat>`: resolve a username or chat target to its numeric Telegram ID
+- `resolve <chat>`: resolve a username or chat target to its numeric Telegram ID
 - `read <chat>`: read recent messages from a dialog
 - `unread`: show unread chats with a small message preview
 - `mark-read <chat>`: mark a dialog as read
 - `draft <chat> <text>`: save a Telegram cloud draft
 - `send <chat> <text> [-r <messageId>]`: send a text message, optionally as a reply
+- `create-group <title> [-u <user>]... [-s] [-a <about>]`: create a new legacy group (default) or supergroup (`--supergroup`); repeat `--user` to invite members, and use `--about` to set a supergroup description
 
 ## Setup
 
@@ -81,6 +84,8 @@ pnpm dev -- read @username --limit 10
 pnpm dev -- draft 500894395 "I will reply later"
 pnpm dev -- draft 500894395 ""
 pnpm dev -- send 500894395 "hello there" --reply-to 42
+pnpm dev -- create-group "Team Sync" --user @alice --user 500894395
+pnpm dev -- create-group "Announcements" --supergroup --about "Product updates"
 ```
 
 ## Notes
