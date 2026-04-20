@@ -21,7 +21,7 @@ import {
 const NEGATIVE_CHAT_ID_PREFIX = 'tg-chat-id:'
 const CHAT_ARG_COMMANDS = new Set(['read', 'mark-read', 'draft', 'send'])
 const CHAT_TARGET_DESCRIPTION =
-  'Prefer numeric chat ID from "telegram chats". Usernames like @username work for resolvable chats, but use your numeric ID from "telegram whoami" for Saved Messages/self.'
+  'Prefer numeric chat ID from "telegram chats". Treat @username as an exact username; if you only have a rough name like "pavel", search with "telegram contacts" first. Use your numeric ID from "telegram whoami" for Saved Messages/self.'
 
 const cli = Cli.create('telegram', {
   version: '0.1.0',
@@ -110,11 +110,12 @@ cli.command('chats', {
 })
 
 cli.command('contacts', {
-  description: 'Search Telegram contacts live by name, username, or phone.',
+  description:
+    'Search Telegram contacts live by name, username, or phone. Use this before send/draft when you only have a rough name; only @username is treated as an exact username.',
   args: z.object({
     query: z
       .string()
-      .describe('Contact search query, like "slobo" or "@superslobo"'),
+      .describe('Contact search query, like "pavel" for a rough match or "@durov" for an exact username'),
   }),
   options: z.object({
     limit: z.coerce
@@ -129,11 +130,11 @@ cli.command('contacts', {
   },
   examples: [
     {
-      args: { query: 'slobo' },
+      args: { query: 'pavel' },
       description: 'Search contacts by nickname or display name fragment',
     },
     {
-      args: { query: '@superslobo' },
+      args: { query: '@durov' },
       description: 'Search contacts by username',
     },
   ],
@@ -235,7 +236,7 @@ cli.command('mark-read', {
 
 cli.command('draft', {
   description:
-    'Save a cloud draft for a chat. Prefer numeric chat ID. Pass an empty string to clear it.',
+    'Save a cloud draft for a chat. Prefer numeric chat ID. If you only have a rough name, use contacts first; only @username is exact. Pass an empty string to clear it.',
   args: z.object({
     chat: z.string().describe(CHAT_TARGET_DESCRIPTION),
     text: z
@@ -294,7 +295,7 @@ cli.command('create-group', {
 
 cli.command('send', {
   description:
-    'Send a plain-text Telegram message, optionally as a reply. Prefer numeric chat ID. This performs a real write action, so agents should prefer read/draft flows unless they are confident a message should actually be sent.',
+    'Send a plain-text Telegram message, optionally as a reply. Prefer numeric chat ID. If you only have a rough name, use contacts first; only @username is exact. This performs a real write action, so agents should prefer read/draft flows unless they are confident a message should actually be sent.',
   args: z.object({
     chat: z.string().describe(CHAT_TARGET_DESCRIPTION),
     text: z
