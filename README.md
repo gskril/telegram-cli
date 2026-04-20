@@ -19,14 +19,14 @@ npx https://pkg.pr.new/gskril/telegram-cli/telegram@main
 - `whoami` / `status`: show the authenticated account and local session info
 - `logout`: clear the active local session
 - `chats`: list recent dialogs
-- `contacts <query>`: search Telegram contacts live by name, username, or phone
+- `contacts <query>`: search Telegram contacts live by name, username, or phone; use this before `send`/`draft` when you only have a rough name
 - `resolve <chat>`: resolve a username or chat target to its numeric Telegram ID
 - `resolve <chat>`: resolve a username or chat target to its numeric Telegram ID
 - `read <chat>`: read recent messages from a dialog
 - `unread`: show unread chats with a small message preview
 - `mark-read <chat>`: mark a dialog as read
-- `draft <chat> <text>`: save a Telegram cloud draft
-- `send <chat> <text> [-r <messageId>]`: send a text message, optionally as a reply
+- `draft <chat> <text>`: save a Telegram cloud draft; if the target is a rough name, resolve it with `contacts` first
+- `send <chat> <text> [-r <messageId>]`: send a text message, optionally as a reply; if the target is a rough name, resolve it with `contacts` first
 - `create-group <title> [-u <user>]... [-s] [-a <about>]`: create a new legacy group (default) or supergroup (`--supergroup`); repeat `--user` to invite members, and use `--about` to set a supergroup description
 
 ## Setup
@@ -78,7 +78,8 @@ pnpm dev -- setup
 pnpm dev -- auth
 pnpm dev -- whoami
 pnpm dev -- chats --unread-only
-pnpm dev -- contacts slobo
+pnpm dev -- contacts pavel
+pnpm dev -- contacts @durov
 pnpm dev -- resolve @username
 pnpm dev -- read @username --limit 10
 pnpm dev -- draft 500894395 "I will reply later"
@@ -91,7 +92,8 @@ pnpm dev -- create-group "Announcements" --supergroup --about "Product updates"
 ## Notes
 
 - This CLI targets a personal Telegram account, not bot-token auth.
-- `contacts <query>` searches only Telegram contacts. It does not search group names, message text, or arbitrary dialogs.
+- `contacts <query>` searches only Telegram contacts. It does not search group names, message text, or arbitrary dialogs. Use it before `send` or `draft` when you only have a rough name like `pavel`.
+- Treat `@username` as an exact username. If you omit the `@`, the input should be treated as a rough contact search term, not an exact username.
 - Use `telegram resolve @username` to look up a numeric user or chat ID before write actions.
 - Prefer numeric chat IDs from `telegram chats` for `read`, `draft`, `send`, and `mark-read`.
 - For your own Saved Messages/self chat, use your numeric ID from `telegram whoami`; your account username may not resolve as a writable chat target.
