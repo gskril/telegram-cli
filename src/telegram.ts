@@ -6,6 +6,9 @@ import readline from 'node:readline/promises'
 import dotenv from 'dotenv'
 import { BaseTelegramClient, type InputPeerLike, type Peer } from '@mtcute/node'
 import {
+  addChatMembers,
+  createGroup as mtcuteCreateGroup,
+  createSupergroup as mtcuteCreateSupergroup,
   getChat,
   getMe,
   getUser,
@@ -409,6 +412,21 @@ function normalizeUsername(value: string): string {
   return value.startsWith('@') ? value.slice(1) : value
 }
 
+async function resolveUserOrChat(
+  tg: BaseTelegramClient,
+  parsed: string | number,
+) {
+  if (typeof parsed === 'string' || parsed > 0) {
+    try {
+      return await getUser(tg, parsed)
+    } catch {
+      // Fall through to chat resolution.
+    }
+  }
+
+  return await getChat(tg, parsed)
+}
+
 export async function resolvePeer(chat: string): Promise<ResolvedPeer> {
   const tg = await getClient()
   const parsed = parseChatId(chat)
@@ -426,22 +444,8 @@ export async function resolvePeer(chat: string): Promise<ResolvedPeer> {
     }
   }
 
-  if (typeof parsed === 'number' && parsed > 0) {
-    try {
-      const user = await getUser(tg, parsed)
-      return {
-        id: user.id,
-        displayName: user.displayName,
-        inputPeer: user.inputPeer,
-        type: user.type,
-      }
-    } catch {
-      // Fall through to chat resolution.
-    }
-  }
-
   try {
-    const peer = await getChat(tg, parsed)
+    const peer = await resolveUserOrChat(tg, parsed)
     return {
       id: peer.id,
       displayName: peer.displayName,
@@ -485,24 +489,19 @@ export async function whoAmI() {
 export async function resolveTarget(chat: string): Promise<ResolvedTarget> {
   const tg = await getClient()
   const parsed = parseChatId(chat)
+  const peer = await resolveUserOrChat(tg, parsed)
 
-  if (typeof parsed === 'string' || (typeof parsed === 'number' && parsed > 0)) {
-    try {
-      const user = await getUser(tg, parsed)
-      return {
-        input: chat,
-        id: String(user.id),
-        displayName: user.displayName,
-        peerType: user.type,
-        username: user.username ?? null,
-        isSelf: user.isSelf,
-      }
-    } catch {
-      // Fall through to chat resolution.
+  if (peer.type === 'user') {
+    return {
+      input: chat,
+      id: String(peer.id),
+      displayName: peer.displayName,
+      peerType: peer.type,
+      username: peer.username ?? null,
+      isSelf: peer.isSelf,
     }
   }
 
-  const peer = await getChat(tg, parsed)
   return {
     input: chat,
     id: String(peer.id),
@@ -710,6 +709,82 @@ export async function setDraft(chat: string, text: string) {
     chatId: String(peer.id),
     chatName: peer.displayName,
     text,
+  }
+}
+
+export async function createChatGroup(
+  title: string,
+  options?: {
+    users?: string[]
+    supergroup?: boolean
+    about?: string
+  },
+) {
+  const tg = await getClient()
+  const users = options?.users ?? []
+  const supergroup = options?.supergroup ?? false
+
+  if (!title.trim()) {
+    throw new Error('Group title is required.')
+  }
+
+  if (!supergroup && users.length === 0) {
+    throw new Error(
+      'Legacy groups require at least one other user. Pass --user, or use --supergroup to create an empty supergroup.',
+    )
+  }
+
+  if (!supergroup && options?.about) {
+    throw new Error(
+      'Legacy groups do not support --about. Use --supergroup to set a description.',
+    )
+  }
+
+  if (supergroup) {
+    const chat = await mtcuteCreateSupergroup(tg, {
+      title,
+      description: options?.about,
+    })
+
+    let missing: Array<{ userId: string; reason: string | null }> = []
+    if (users.length > 0) {
+      const failures = await addChatMembers(tg, chat.inputPeer, users, {})
+      missing = failures.map((f) => ({
+        userId: String(f.userId),
+        reason: f.premiumWouldAllowInvite
+          ? 'premium_required'
+          : f.premiumRequiredForPm
+            ? 'premium_required_for_pm'
+            : null,
+      }))
+    }
+
+    return {
+      success: true,
+      chatId: String(chat.id),
+      chatName: chat.displayName,
+      chatType: chat.chatType,
+      username: chat.username ?? null,
+      missing,
+    }
+  }
+
+  const { chat, missing } = await mtcuteCreateGroup(tg, { title, users })
+
+  return {
+    success: true,
+    chatId: String(chat.id),
+    chatName: chat.displayName,
+    chatType: chat.chatType,
+    username: chat.username ?? null,
+    missing: missing.map((f) => ({
+      userId: String(f.userId),
+      reason: f.premiumWouldAllowInvite
+        ? 'premium_required'
+        : f.premiumRequiredForPm
+          ? 'premium_required_for_pm'
+          : null,
+    })),
   }
 }
 

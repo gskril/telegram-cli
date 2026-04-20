@@ -3,6 +3,7 @@ import { Cli, z } from 'incur'
 
 import {
   auth,
+  createChatGroup,
   listChats,
   logout,
   markRead,
@@ -136,12 +137,12 @@ cli.command('read', {
 
 cli.command('resolve', {
   description:
-    'Resolve a username or chat target to its numeric Telegram ID.',
+    'Look up a Telegram identifier (username, numeric ID, or "me") and return its canonical metadata: numeric ID, display name, type, username, isSelf.',
   args: z.object({
     chat: z
       .string()
       .describe(
-        'Username, chat ID, or special self target like "me". Example: @username',
+        'The identifier to resolve: @username, numeric user/chat ID, or "me" for your own account.',
       ),
   }),
   examples: [
@@ -210,6 +211,53 @@ cli.command('draft', {
       .describe('Draft text. Wrap in quotes. Use "" to clear the draft'),
   }),
   run: async (c) => setDraft(c.args.chat, c.args.text),
+})
+
+cli.command('create-group', {
+  description:
+    'Create a new Telegram group or supergroup. Prints the new chat ID so you can pipe it into send/draft. This performs a real write action.',
+  args: z.object({
+    title: z.string().describe('Group title. Wrap in quotes if it has spaces'),
+  }),
+  options: z.object({
+    user: z
+      .array(z.string())
+      .default([])
+      .describe(
+        'User to invite. Repeat the flag for multiple users. Accepts usernames (@alice) or numeric user IDs. Required for legacy groups.',
+      ),
+    supergroup: z
+      .boolean()
+      .optional()
+      .describe('Create a supergroup instead of a legacy group'),
+    about: z
+      .string()
+      .optional()
+      .describe('Description text. Supergroups only'),
+  }),
+  alias: {
+    user: 'u',
+    supergroup: 's',
+    about: 'a',
+  },
+  examples: [
+    {
+      args: { title: 'Team Sync' },
+      options: { user: ['@alice', '500894395'] },
+      description: 'Create a legacy group with two members',
+    },
+    {
+      args: { title: 'Announcements' },
+      options: { supergroup: true, about: 'Product updates' },
+      description: 'Create an empty supergroup with a description',
+    },
+  ],
+  run: async (c) =>
+    createChatGroup(c.args.title, {
+      users: c.options.user,
+      supergroup: c.options.supergroup,
+      about: c.options.about,
+    }),
 })
 
 cli.command('send', {
