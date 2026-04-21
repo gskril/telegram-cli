@@ -27,7 +27,7 @@ npx https://pkg.pr.new/gskril/telegram-cli/telegram@main
 - `mark-read <chat>`: mark a dialog as read
 - `draft <chat> <text>`: save a Telegram cloud draft; if the target is a rough name, resolve it with `contacts` first
 - `send <chat> <text> [-r <messageId>]`: send a text message, optionally as a reply; if the target is a rough name, resolve it with `contacts` first
-- `create-group <title> [-u <user>]... [-s] [-a <about>]`: create a new legacy group (default) or supergroup (`--supergroup`); repeat `--user` to invite members, and use `--about` to set a supergroup description
+- `create-group <title> [-u <user>]... [-s] [-a <about>]`: create a new legacy group (default) or supergroup (`--supergroup`); repeat `--user` to invite members, and use `--about` to set a supergroup description. `--user` accepts `@username` or numeric user IDs from `contacts`/`resolve`.
 
 ## Setup
 
@@ -86,6 +86,8 @@ pnpm dev -- draft 500894395 "I will reply later"
 pnpm dev -- draft 500894395 ""
 pnpm dev -- send 500894395 "hello there" --reply-to 42
 pnpm dev -- create-group "Team Sync" --user @alice --user 500894395
+# Comma-separated invitees are also accepted for convenience
+pnpm dev -- create-group "Team Sync" --user @alice,500894395
 pnpm dev -- create-group "Announcements" --supergroup --about "Product updates"
 ```
 
@@ -96,6 +98,7 @@ pnpm dev -- create-group "Announcements" --supergroup --about "Product updates"
 - Treat `@username` as an exact username. If you omit the `@`, the input should be treated as a rough contact search term, not an exact username.
 - Use `telegram resolve @username` to look up a numeric user or chat ID before write actions.
 - Prefer numeric chat IDs from `telegram chats` for `read`, `draft`, `send`, and `mark-read`.
+- `create-group --user` accepts either `@username` or numeric user IDs. For multiple invitees, prefer repeating `--user`; comma-separated values are also supported.
 - For your own Saved Messages/self chat, use your numeric ID from `telegram whoami`; your account username may not resolve as a writable chat target.
 - Telegram API credentials are stored in a user-scoped config file.
 - Telegram session and cache state are stored in a user-scoped SQLite file managed by mtcute.

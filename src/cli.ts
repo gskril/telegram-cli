@@ -257,7 +257,7 @@ cli.command('create-group', {
       .array(z.string())
       .default([])
       .describe(
-        'User to invite. Repeat the flag for multiple users. Accepts usernames (@alice) or numeric user IDs. Required for legacy groups.',
+        'User to invite. Repeat the flag for multiple users. Accepts usernames (@alice) or numeric user IDs; comma-separated values are also accepted. Required for legacy groups.',
       ),
     supergroup: z
       .boolean()

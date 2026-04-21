@@ -401,12 +401,32 @@ export async function shutdownClient() {
   await tg.destroy().catch(() => undefined)
 }
 
+function parsePeerTarget(target: string | number): string | number {
+  if (typeof target === 'number') return target
+
+  return /^-?\d+$/.test(target) ? Number.parseInt(target, 10) : target
+}
+
 function parseChatId(chat: string): string | number {
   if (chat.startsWith(NEGATIVE_CHAT_ID_PREFIX)) {
     chat = chat.slice(NEGATIVE_CHAT_ID_PREFIX.length)
   }
 
-  return /^-?\d+$/.test(chat) ? Number.parseInt(chat, 10) : chat
+  return parsePeerTarget(chat)
+}
+
+function normalizeInviteTargets(
+  targets: ReadonlyArray<string | number>,
+): Array<string | number> {
+  return targets.flatMap((target) => {
+    if (typeof target === 'number') return [target]
+
+    return target
+      .split(',')
+      .map((value) => value.trim())
+      .filter((value) => value.length > 0)
+      .map(parsePeerTarget)
+  })
 }
 
 function normalizeUsername(value: string): string {
@@ -828,13 +848,13 @@ export async function setDraft(chat: string, text: string) {
 export async function createChatGroup(
   title: string,
   options?: {
-    users?: string[]
+    users?: Array<string | number>
     supergroup?: boolean
     about?: string
   },
 ) {
   const tg = await getClient()
-  const users = options?.users ?? []
+  const users = normalizeInviteTargets(options?.users ?? [])
   const supergroup = options?.supergroup ?? false
 
   if (!title.trim()) {
