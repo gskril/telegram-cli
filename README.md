@@ -14,7 +14,7 @@ npx https://pkg.pr.new/gskril/telegram-cli/telegram@main
 
 ## Commands
 
-- `auth`: log in interactively and persist a local session
+- `auth [--read-only]`: log in interactively and persist a local session; `--read-only` blocks `send` and `create-group` at the CLI layer
 - `setup`: interactively store `TELEGRAM_API_ID` and `TELEGRAM_API_HASH`
 - `whoami` / `status`: show the authenticated account and local session info
 - `logout`: clear the active local session
@@ -94,6 +94,7 @@ pnpm dev -- create-group "Announcements" --supergroup --about "Product updates"
 ## Notes
 
 - This CLI targets a personal Telegram account, not bot-token auth.
+- `auth --read-only` enables a local guard that blocks `send` and `create-group`, so read-only agent flows can't accidentally fire writes. Telegram's MTProto does not support scoped user sessions, so this is a CLI-layer check only: the stored session file itself still has full account access, and anything that uses the session file outside this CLI bypasses the guard. `auth` without the flag (or `logout`) clears the marker.
 - `contacts <query>` searches only Telegram contacts. It does not search group names, message text, or arbitrary dialogs. Use it before `send` or `draft` when you only have a rough name like `pavel`.
 - Treat `@username` as an exact username. If you omit the `@`, the input should be treated as a rough contact search term, not an exact username.
 - Use `telegram resolve @username` to look up a numeric user or chat ID before write actions.
