@@ -25,8 +25,8 @@ importers:
         specifier: ^17.4.2
         version: 17.4.2
       incur:
-        specifier: ^0.3.25
-        version: 0.3.25
+        specifier: ^0.4.4
+        version: 0.4.4
       prettier:
         specifier: ^3.8.3
         version: 3.8.3
@@ -557,8 +557,8 @@ packages:
     resolution: {integrity: sha512-B6Lc2s6yApwnD2/pMzFh/d5AVjdsDXjgkeJ766FmFuJELIGHNycKRj+l3A39yZPM4CchqNCB4RITEAYB1KUM6A==}
     engines: {node: '>=20.19.0'}
 
-  incur@0.3.25:
-    resolution: {integrity: sha512-jrSkzauM42ilbQJ6THVkAY6dTulkyVW0sZpVHdA8gfiBwrLrLnLUf8U3bAOegAKBIMSOFgk1idchgu9xm9HMng==}
+  incur@0.4.4:
+    resolution: {integrity: sha512-Tz//nCfmR8VzvF7PvobqwVNrkSxfX5KrKULIhDpHjSWnVoETsKiODjUIZt1nwdaKn8pcaCIrHrU6DYYPh1Z24A==}
     engines: {node: '>=22'}
     hasBin: true
 
@@ -1203,7 +1203,7 @@ snapshots:
 
   import-without-cache@0.2.5: {}
 
-  incur@0.3.25:
+  incur@0.4.4:
     dependencies:
       '@cfworker/json-schema': 4.1.1
       '@modelcontextprotocol/server': 2.0.0-alpha.2(@cfworker/json-schema@4.1.1)
