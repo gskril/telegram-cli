@@ -42,15 +42,27 @@ cli.command('auth', {
       .boolean()
       .optional()
       .describe('Ignore the saved session and log in again'),
+    readOnly: z
+      .boolean()
+      .optional()
+      .describe(
+        'Mark this session read-only: block send/create-group at the CLI layer (local guard only; session file itself still has full account access)',
+      ),
   }),
   alias: {
     force: 'f',
+    readOnly: 'r',
   },
   examples: [
     { description: 'Log in using the saved session or interactive prompts' },
     { options: { force: true }, description: 'Force a fresh login flow' },
+    {
+      options: { readOnly: true },
+      description: 'Log in and block write commands locally',
+    },
   ],
-  run: async (c) => auth({ force: c.options.force }),
+  run: async (c) =>
+    auth({ force: c.options.force, readOnly: c.options.readOnly }),
 })
 
 cli.command('setup', {

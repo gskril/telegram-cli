@@ -1,4 +1,4 @@
-import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import readline from 'node:readline/promises'
@@ -30,6 +30,7 @@ const CONFIG_DIR = resolveConfigDir()
 const STATE_DIR = resolveStateDir()
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json')
 const STORAGE_FILE = path.join(STATE_DIR, 'telegram.session')
+const READONLY_MARKER_FILE = path.join(STATE_DIR, 'session.readonly')
 
 let client: BaseTelegramClient | null = null
 const NEGATIVE_CHAT_ID_PREFIX = 'tg-chat-id:'
@@ -101,6 +102,39 @@ export function getConfigFile(): string {
 
 export function getStorageFile(): string {
   return STORAGE_FILE
+}
+
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await stat(filePath)
+    return true
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false
+    throw error
+  }
+}
+
+export async function isReadOnly(): Promise<boolean> {
+  return fileExists(READONLY_MARKER_FILE)
+}
+
+async function setReadOnly(readOnly: boolean): Promise<void> {
+  if (readOnly) {
+    await ensureDir(STATE_DIR)
+    await writeFile(READONLY_MARKER_FILE, '', { encoding: 'utf8', mode: 0o600 })
+    await chmod(READONLY_MARKER_FILE, 0o600).catch(() => undefined)
+    return
+  }
+
+  await rm(READONLY_MARKER_FILE, { force: true })
+}
+
+async function assertWritable(): Promise<void> {
+  if (await isReadOnly()) {
+    throw new Error(
+      'Read-only mode is enabled for this session. Write commands are disabled. Re-run "telegram auth" without --read-only to allow writes.',
+    )
+  }
 }
 
 async function ensureDir(dir: string): Promise<void> {
@@ -360,15 +394,18 @@ export async function setupConfig(options?: { force?: boolean }) {
   }
 }
 
-export async function auth(options?: { force?: boolean }) {
+export async function auth(options?: { force?: boolean; readOnly?: boolean }) {
   const tg = await authClient({ forceLogin: options?.force })
   const me = await getMe(tg)
+  const readOnly = Boolean(options?.readOnly)
+  await setReadOnly(readOnly)
 
   return {
     authenticated: true,
     id: me.id,
     displayName: me.displayName,
     username: me.username ?? null,
+    readOnly,
     configFile: CONFIG_FILE,
     storageFile: STORAGE_FILE,
   }
@@ -384,6 +421,7 @@ export async function logout() {
   } finally {
     client = null
     await tg.destroy().catch(() => undefined)
+    await setReadOnly(false)
   }
 
   return {
@@ -572,6 +610,7 @@ export async function resolvePeer(chat: string): Promise<ResolvedPeer> {
 export async function whoAmI() {
   const tg = await getClient()
   const me = await getMe(tg)
+  const readOnly = await isReadOnly()
 
   return {
     authenticated: true,
@@ -580,6 +619,7 @@ export async function whoAmI() {
     username: me.username ?? null,
     isPremium: me.isPremium,
     isBot: me.isBot,
+    readOnly,
     configFile: CONFIG_FILE,
     storageFile: STORAGE_FILE,
     dataDir: STATE_DIR,
@@ -853,6 +893,7 @@ export async function createChatGroup(
     about?: string
   },
 ) {
+  await assertWritable()
   const tg = await getClient()
   const users = normalizeInviteTargets(options?.users ?? [])
   const supergroup = options?.supergroup ?? false
@@ -928,6 +969,7 @@ export async function sendMessage(
     replyTo?: number
   },
 ) {
+  await assertWritable()
   const tg = await getClient()
   const peer = await resolvePeer(chat)
   const message = await sendText(tg, peer.inputPeer, text, {
