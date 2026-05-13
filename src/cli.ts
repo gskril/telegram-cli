@@ -3,8 +3,9 @@ import { Cli, z } from 'incur'
 
 import {
   auth,
-  listContacts,
   createChatGroup,
+  getMemberCount,
+  listContacts,
   listChats,
   logout,
   markRead,
@@ -19,7 +20,14 @@ import {
 } from './telegram.js'
 
 const NEGATIVE_CHAT_ID_PREFIX = 'tg-chat-id:'
-const CHAT_ARG_COMMANDS = new Set(['read', 'mark-read', 'draft', 'send'])
+const CHAT_ARG_COMMANDS = new Set([
+  'group-size',
+  'member-count',
+  'read',
+  'mark-read',
+  'draft',
+  'send',
+])
 const CHAT_TARGET_DESCRIPTION =
   'Prefer numeric chat ID from "telegram chats". Treat @username as an exact username; if you only have a rough name like "pavel", search with "telegram contacts" first. Use your numeric ID from "telegram whoami" for Saved Messages/self.'
 
@@ -127,7 +135,9 @@ cli.command('contacts', {
   args: z.object({
     query: z
       .string()
-      .describe('Contact search query, like "pavel" for a rough match or "@durov" for an exact username'),
+      .describe(
+        'Contact search query, like "pavel" for a rough match or "@durov" for an exact username',
+      ),
   }),
   options: z.object({
     limit: z.coerce
@@ -178,6 +188,25 @@ cli.command('read', {
     },
   ],
   run: async (c) => readChat(c.args.chat, { limit: c.options.limit }),
+})
+
+cli.command('member-count', {
+  aliases: ['group-size'],
+  description: 'Show the number of people in a group, supergroup, or channel.',
+  args: z.object({
+    chat: z.string().describe(CHAT_TARGET_DESCRIPTION),
+  }),
+  examples: [
+    {
+      args: { chat: '-1001234567890' },
+      description: 'Check a group by numeric ID',
+    },
+    {
+      args: { chat: '@publicgroup' },
+      description: 'Check a public group or channel by username',
+    },
+  ],
+  run: async (c) => getMemberCount(c.args.chat),
 })
 
 cli.command('resolve', {
@@ -275,10 +304,7 @@ cli.command('create-group', {
       .boolean()
       .optional()
       .describe('Create a supergroup instead of a legacy group'),
-    about: z
-      .string()
-      .optional()
-      .describe('Description text. Supergroups only'),
+    about: z.string().optional().describe('Description text. Supergroups only'),
   }),
   alias: {
     user: 'u',
