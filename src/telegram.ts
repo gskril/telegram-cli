@@ -15,6 +15,8 @@ import {
   getUser,
   iterDialogs,
   iterHistory,
+  kickChatMember,
+  leaveChat as mtcuteLeaveChat,
   logOut,
   readHistory,
   saveDraft,
@@ -674,7 +676,9 @@ export async function listContacts(
       score: contactSearchScore(query, contact),
     }))
     .filter((contact) => contact.score > 0)
-    .sort((a, b) => b.score - a.score || a.displayName.localeCompare(b.displayName))
+    .sort(
+      (a, b) => b.score - a.score || a.displayName.localeCompare(b.displayName),
+    )
     .slice(0, options?.limit ?? 20)
     .map(({ score: _score, ...contact }) => contact)
 
@@ -959,6 +963,75 @@ export async function createChatGroup(
           ? 'premium_required_for_pm'
           : null,
     })),
+  }
+}
+
+export async function removeChatMembers(
+  chat: string,
+  options: {
+    users: Array<string | number>
+    me?: boolean
+    clear?: boolean
+  },
+) {
+  await assertWritable()
+  const tg = await getClient()
+  const peer = await resolvePeer(chat)
+  const users = normalizeInviteTargets(options.users)
+
+  if (users.length === 0 && !options.me) {
+    throw new Error('At least one user is required. Pass --user or --me.')
+  }
+
+  const removed: Array<{
+    user: string
+    messageId: number | null
+    date: string | null
+  }> = []
+
+  for (const user of users) {
+    const message = await kickChatMember(tg, {
+      chatId: peer.inputPeer,
+      userId: user,
+    })
+
+    removed.push({
+      user: String(user),
+      messageId: message?.id ?? null,
+      date: message?.date.toISOString() ?? null,
+    })
+  }
+
+  if (options.me) {
+    await mtcuteLeaveChat(tg, peer.inputPeer, { clear: options.clear })
+  }
+
+  return {
+    success: true,
+    chatId: String(peer.id),
+    chatName: peer.displayName,
+    removed,
+    leftSelf: options.me ?? false,
+    clearedHistory: options.me ? (options.clear ?? false) : false,
+  }
+}
+
+export async function leaveChatGroup(
+  chat: string,
+  options?: { clear?: boolean },
+) {
+  await assertWritable()
+  const tg = await getClient()
+  const peer = await resolvePeer(chat)
+
+  await mtcuteLeaveChat(tg, peer.inputPeer, { clear: options?.clear })
+
+  return {
+    success: true,
+    chatId: String(peer.id),
+    chatName: peer.displayName,
+    leftSelf: true,
+    clearedHistory: options?.clear ?? false,
   }
 }
 
