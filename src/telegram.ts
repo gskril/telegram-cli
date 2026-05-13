@@ -10,6 +10,7 @@ import {
   createGroup as mtcuteCreateGroup,
   createSupergroup as mtcuteCreateSupergroup,
   getChat,
+  getChatMembers,
   getContacts,
   getMe,
   getUser,
@@ -674,7 +675,9 @@ export async function listContacts(
       score: contactSearchScore(query, contact),
     }))
     .filter((contact) => contact.score > 0)
-    .sort((a, b) => b.score - a.score || a.displayName.localeCompare(b.displayName))
+    .sort(
+      (a, b) => b.score - a.score || a.displayName.localeCompare(b.displayName),
+    )
     .slice(0, options?.limit ?? 20)
     .map(({ score: _score, ...contact }) => contact)
 
@@ -723,6 +726,40 @@ export async function listChats(options?: {
   return {
     count: chats.length,
     chats,
+  }
+}
+
+export async function getMemberCount(chat: string) {
+  const tg = await getClient()
+  const peer = await resolvePeer(chat)
+
+  if (peer.type === 'user') {
+    throw new Error(
+      'Member count is only available for groups, supergroups, and channels.',
+    )
+  }
+
+  const fullChat = await getChat(tg, peer.inputPeer)
+  let memberCount = fullChat.membersCount
+
+  if (memberCount === null && fullChat.chatType !== 'group') {
+    const members = await getChatMembers(tg, peer.inputPeer, { limit: 1 })
+    memberCount = members.total
+  }
+
+  if (memberCount === null) {
+    const members = await getChatMembers(tg, peer.inputPeer)
+    memberCount = members.total
+  }
+
+  return {
+    chat: {
+      id: String(fullChat.id),
+      name: fullChat.displayName,
+      type: fullChat.chatType,
+      username: fullChat.username ?? null,
+    },
+    memberCount,
   }
 }
 

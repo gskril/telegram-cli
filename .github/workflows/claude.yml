@@ -50,4 +50,3 @@ jobs:
             --max-turns 10
             --model claude-opus-4-7
             --allow-dangerously-skip-permissions
-

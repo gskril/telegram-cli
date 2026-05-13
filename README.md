@@ -21,7 +21,7 @@ npx https://pkg.pr.new/gskril/telegram-cli/telegram@main
 - `chats`: list recent dialogs
 - `contacts <query>`: search Telegram contacts live by name, username, or phone; use this before `send`/`draft` when you only have a rough name
 - `resolve <chat>`: resolve a username or chat target to its numeric Telegram ID
-- `resolve <chat>`: resolve a username or chat target to its numeric Telegram ID
+- `member-count <chat>` / `group-size <chat>`: show the number of people in a group, supergroup, or channel
 - `read <chat>`: read recent messages from a dialog
 - `unread`: show unread chats with a small message preview
 - `mark-read <chat>`: mark a dialog as read
@@ -81,6 +81,7 @@ pnpm dev -- chats --unread-only
 pnpm dev -- contacts pavel
 pnpm dev -- contacts @durov
 pnpm dev -- resolve @username
+pnpm dev -- member-count -1001234567890
 pnpm dev -- read @username --limit 10
 pnpm dev -- draft 500894395 "I will reply later"
 pnpm dev -- draft 500894395 ""
