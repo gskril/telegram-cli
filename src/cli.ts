@@ -7,8 +7,10 @@ import {
   createChatGroup,
   listChats,
   logout,
+  leaveChatGroup,
   markRead,
   readChat,
+  removeChatMembers,
   resolveTarget,
   sendMessage,
   shutdownClient,
@@ -19,7 +21,16 @@ import {
 } from './telegram.js'
 
 const NEGATIVE_CHAT_ID_PREFIX = 'tg-chat-id:'
-const CHAT_ARG_COMMANDS = new Set(['read', 'mark-read', 'draft', 'send'])
+const CHAT_ARG_COMMANDS = new Set([
+  'read',
+  'mark-read',
+  'draft',
+  'send',
+  'remove-members',
+  'kick',
+  'leave',
+  'leave-group',
+])
 const CHAT_TARGET_DESCRIPTION =
   'Prefer numeric chat ID from "telegram chats". Treat @username as an exact username; if you only have a rough name like "pavel", search with "telegram contacts" first. Use your numeric ID from "telegram whoami" for Saved Messages/self.'
 
@@ -127,7 +138,9 @@ cli.command('contacts', {
   args: z.object({
     query: z
       .string()
-      .describe('Contact search query, like "pavel" for a rough match or "@durov" for an exact username'),
+      .describe(
+        'Contact search query, like "pavel" for a rough match or "@durov" for an exact username',
+      ),
   }),
   options: z.object({
     limit: z.coerce
@@ -275,10 +288,7 @@ cli.command('create-group', {
       .boolean()
       .optional()
       .describe('Create a supergroup instead of a legacy group'),
-    about: z
-      .string()
-      .optional()
-      .describe('Description text. Supergroups only'),
+    about: z.string().optional().describe('Description text. Supergroups only'),
   }),
   alias: {
     user: 'u',
@@ -303,6 +313,79 @@ cli.command('create-group', {
       supergroup: c.options.supergroup,
       about: c.options.about,
     }),
+})
+
+cli.command('remove-members', {
+  aliases: ['kick'],
+  description:
+    'Remove one or more people from a group or supergroup, or pass --me to leave it yourself. This performs a real write action.',
+  args: z.object({
+    chat: z.string().describe(CHAT_TARGET_DESCRIPTION),
+  }),
+  options: z.object({
+    user: z
+      .array(z.string())
+      .default([])
+      .describe(
+        'User to remove. Repeat the flag for multiple users. Accepts usernames (@alice) or numeric user IDs; comma-separated values are also accepted.',
+      ),
+    me: z
+      .boolean()
+      .optional()
+      .describe('Remove yourself from the group, equivalent to leaving it'),
+    clear: z
+      .boolean()
+      .optional()
+      .describe(
+        'Clear local history after leaving. Only applies to legacy groups with --me',
+      ),
+  }),
+  alias: {
+    user: 'u',
+    me: 'm',
+  },
+  examples: [
+    {
+      args: { chat: '-1001234567890' },
+      options: { user: ['@alice', '500894395'] },
+      description: 'Remove two members from a group',
+    },
+    {
+      args: { chat: '-1001234567890' },
+      options: { me: true },
+      description: 'Leave a group yourself',
+    },
+  ],
+  run: async (c) =>
+    removeChatMembers(c.args.chat, {
+      users: c.options.user,
+      me: c.options.me,
+      clear: c.options.clear,
+    }),
+})
+
+cli.command('leave', {
+  aliases: ['leave-group'],
+  description:
+    'Leave a group, supergroup, or channel. This performs a real write action.',
+  args: z.object({
+    chat: z.string().describe(CHAT_TARGET_DESCRIPTION),
+  }),
+  options: z.object({
+    clear: z
+      .boolean()
+      .optional()
+      .describe(
+        'Clear local history after leaving. Only applies to legacy groups',
+      ),
+  }),
+  examples: [
+    {
+      args: { chat: '-1001234567890' },
+      description: 'Leave a group by numeric ID',
+    },
+  ],
+  run: async (c) => leaveChatGroup(c.args.chat, { clear: c.options.clear }),
 })
 
 cli.command('send', {
