@@ -1005,8 +1005,6 @@ export async function removeChatMembers(
   chat: string,
   options: {
     users: Array<string | number>
-    me?: boolean
-    clear?: boolean
   },
 ) {
   await assertWritable()
@@ -1014,8 +1012,8 @@ export async function removeChatMembers(
   const peer = await resolvePeer(chat)
   const users = normalizeInviteTargets(options.users)
 
-  if (users.length === 0 && !options.me) {
-    throw new Error('At least one user is required. Pass --user or --me.')
+  if (users.length === 0) {
+    throw new Error('At least one user is required. Pass --user.')
   }
 
   const removed: Array<{
@@ -1037,17 +1035,11 @@ export async function removeChatMembers(
     })
   }
 
-  if (options.me) {
-    await mtcuteLeaveChat(tg, peer.inputPeer, { clear: options.clear })
-  }
-
   return {
     success: true,
     chatId: String(peer.id),
     chatName: peer.displayName,
     removed,
-    leftSelf: options.me ?? false,
-    clearedHistory: options.me ? (options.clear ?? false) : false,
   }
 }
 

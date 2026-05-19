@@ -29,9 +29,7 @@ const CHAT_ARG_COMMANDS = new Set([
   'draft',
   'send',
   'remove-members',
-  'kick',
   'leave',
-  'leave-group',
 ])
 const CHAT_TARGET_DESCRIPTION =
   'Prefer numeric chat ID from "telegram chats". Treat @username as an exact username; if you only have a rough name like "pavel", search with "telegram contacts" first. Use your numeric ID from "telegram whoami" for Saved Messages/self.'
@@ -62,10 +60,6 @@ cli.command('auth', {
         'Mark this session read-only: block send/create-group at the CLI layer (local guard only; session file itself still has full account access)',
       ),
   }),
-  alias: {
-    force: 'f',
-    readOnly: 'r',
-  },
   examples: [
     { description: 'Log in using the saved session or interactive prompts' },
     { options: { force: true }, description: 'Force a fresh login flow' },
@@ -87,9 +81,6 @@ cli.command('setup', {
       .optional()
       .describe('Rewrite the config even if it already exists'),
   }),
-  alias: {
-    force: 'f',
-  },
   examples: [
     { description: 'Create config on first install' },
     { options: { force: true }, description: 'Rewrite existing config' },
@@ -98,7 +89,6 @@ cli.command('setup', {
 })
 
 cli.command('whoami', {
-  aliases: ['status'],
   description: 'Show the authenticated account and local session status.',
   run: async () => whoAmI(),
 })
@@ -119,10 +109,6 @@ cli.command('chats', {
       .describe('Maximum chats to return'),
     unreadOnly: z.boolean().optional().describe('Only show unread chats'),
   }),
-  alias: {
-    limit: 'l',
-    unreadOnly: 'u',
-  },
   examples: [
     { description: 'List recent chats' },
     { options: { unreadOnly: true }, description: 'Only list unread chats' },
@@ -152,9 +138,6 @@ cli.command('contacts', {
       .default(20)
       .describe('Maximum contacts to return'),
   }),
-  alias: {
-    limit: 'l',
-  },
   examples: [
     {
       args: { query: 'pavel' },
@@ -182,9 +165,6 @@ cli.command('read', {
       .default(20)
       .describe('Maximum messages to return'),
   }),
-  alias: {
-    limit: 'l',
-  },
   examples: [
     { args: { chat: '@durov' }, description: 'Read a username-based chat' },
     {
@@ -252,10 +232,6 @@ cli.command('unread', {
       .default(5)
       .describe('Maximum unread messages to return per chat'),
   }),
-  alias: {
-    chatsLimit: 'c',
-    messagesLimit: 'm',
-  },
   run: async (c) =>
     unreadChats({
       chatsLimit: c.options.chatsLimit,
@@ -310,11 +286,6 @@ cli.command('create-group', {
       .describe('Create a supergroup instead of a legacy group'),
     about: z.string().optional().describe('Description text. Supergroups only'),
   }),
-  alias: {
-    user: 'u',
-    supergroup: 's',
-    about: 'a',
-  },
   examples: [
     {
       args: { title: 'Team Sync' },
@@ -336,9 +307,8 @@ cli.command('create-group', {
 })
 
 cli.command('remove-members', {
-  aliases: ['kick'],
   description:
-    'Remove one or more people from a group or supergroup, or pass --me to leave it yourself. This performs a real write action.',
+    'Remove one or more people from a group or supergroup. This performs a real write action.',
   args: z.object({
     chat: z.string().describe(CHAT_TARGET_DESCRIPTION),
   }),
@@ -349,43 +319,21 @@ cli.command('remove-members', {
       .describe(
         'User to remove. Repeat the flag for multiple users. Accepts usernames (@alice) or numeric user IDs; comma-separated values are also accepted.',
       ),
-    me: z
-      .boolean()
-      .optional()
-      .describe('Remove yourself from the group, equivalent to leaving it'),
-    clear: z
-      .boolean()
-      .optional()
-      .describe(
-        'Clear local history after leaving. Only applies to legacy groups with --me',
-      ),
   }),
-  alias: {
-    user: 'u',
-    me: 'm',
-  },
   examples: [
     {
       args: { chat: '-1001234567890' },
       options: { user: ['@alice', '500894395'] },
       description: 'Remove two members from a group',
     },
-    {
-      args: { chat: '-1001234567890' },
-      options: { me: true },
-      description: 'Leave a group yourself',
-    },
   ],
   run: async (c) =>
     removeChatMembers(c.args.chat, {
       users: c.options.user,
-      me: c.options.me,
-      clear: c.options.clear,
     }),
 })
 
 cli.command('leave', {
-  aliases: ['leave-group'],
   description:
     'Leave a group, supergroup, or channel. This performs a real write action.',
   args: z.object({
@@ -425,9 +373,6 @@ cli.command('send', {
       .optional()
       .describe('Reply to this message ID'),
   }),
-  alias: {
-    replyTo: 'r',
-  },
   examples: [
     { args: { chat: '@durov', text: 'hello' }, description: 'Send a message' },
     {
