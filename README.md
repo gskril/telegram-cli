@@ -60,7 +60,7 @@ Build the CLI:
 
 ```bash
 pnpm build
-node dist/cli.js --help
+node dist/cli.mjs --help
 ```
 
 Once published under an available npm package name, users will be able to install it globally and run:
@@ -99,7 +99,7 @@ pnpm dev -- create-group "Announcements" --supergroup --about "Product updates"
 - `contacts <query>` searches only Telegram contacts. It does not search group names, message text, or arbitrary dialogs. Use it before `send` or `draft` when you only have a rough name like `pavel`.
 - Treat `@username` as an exact username. If you omit the `@`, the input should be treated as a rough contact search term, not an exact username.
 - Use `telegram resolve @username` to look up a numeric user or chat ID before write actions.
-- Prefer numeric chat IDs from `telegram chats` for `read`, `draft`, `send`, and `mark-read`.
+- Prefer numeric chat IDs from `telegram chats` for `member-count`, `read`, `draft`, `send`, and `mark-read`.
 - `create-group --user` accepts either `@username` or numeric user IDs. For multiple invitees, prefer repeating `--user`; comma-separated values are also supported.
 - For your own Saved Messages/self chat, use your numeric ID from `telegram whoami`; your account username may not resolve as a writable chat target.
 - Telegram API credentials are stored in a user-scoped config file.
