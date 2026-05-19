@@ -3,8 +3,9 @@ import { Cli, z } from 'incur'
 
 import {
   auth,
-  listContacts,
   createChatGroup,
+  getMemberCount,
+  listContacts,
   listChats,
   logout,
   leaveChatGroup,
@@ -22,6 +23,7 @@ import {
 
 const NEGATIVE_CHAT_ID_PREFIX = 'tg-chat-id:'
 const CHAT_ARG_COMMANDS = new Set([
+  'member-count',
   'read',
   'mark-read',
   'draft',
@@ -191,6 +193,24 @@ cli.command('read', {
     },
   ],
   run: async (c) => readChat(c.args.chat, { limit: c.options.limit }),
+})
+
+cli.command('member-count', {
+  description: 'Show the number of people in a group, supergroup, or channel.',
+  args: z.object({
+    chat: z.string().describe(CHAT_TARGET_DESCRIPTION),
+  }),
+  examples: [
+    {
+      args: { chat: '-1001234567890' },
+      description: 'Check a group by numeric ID',
+    },
+    {
+      args: { chat: '@publicgroup' },
+      description: 'Check a public group or channel by username',
+    },
+  ],
+  run: async (c) => getMemberCount(c.args.chat),
 })
 
 cli.command('resolve', {
