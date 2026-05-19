@@ -16,6 +16,8 @@ import {
   getUser,
   iterDialogs,
   iterHistory,
+  kickChatMember,
+  leaveChat as mtcuteLeaveChat,
   logOut,
   readHistory,
   saveDraft,
@@ -996,6 +998,67 @@ export async function createChatGroup(
           ? 'premium_required_for_pm'
           : null,
     })),
+  }
+}
+
+export async function removeChatMembers(
+  chat: string,
+  options: {
+    users: Array<string | number>
+  },
+) {
+  await assertWritable()
+  const tg = await getClient()
+  const peer = await resolvePeer(chat)
+  const users = normalizeInviteTargets(options.users)
+
+  if (users.length === 0) {
+    throw new Error('At least one user is required. Pass --user.')
+  }
+
+  const removed: Array<{
+    user: string
+    messageId: number | null
+    date: string | null
+  }> = []
+
+  for (const user of users) {
+    const message = await kickChatMember(tg, {
+      chatId: peer.inputPeer,
+      userId: user,
+    })
+
+    removed.push({
+      user: String(user),
+      messageId: message?.id ?? null,
+      date: message?.date.toISOString() ?? null,
+    })
+  }
+
+  return {
+    success: true,
+    chatId: String(peer.id),
+    chatName: peer.displayName,
+    removed,
+  }
+}
+
+export async function leaveChatGroup(
+  chat: string,
+  options?: { clear?: boolean },
+) {
+  await assertWritable()
+  const tg = await getClient()
+  const peer = await resolvePeer(chat)
+
+  await mtcuteLeaveChat(tg, peer.inputPeer, { clear: options?.clear })
+
+  return {
+    success: true,
+    chatId: String(peer.id),
+    chatName: peer.displayName,
+    leftSelf: true,
+    clearedHistory: options?.clear ?? false,
   }
 }
 
