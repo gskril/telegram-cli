@@ -21,7 +21,6 @@ import {
 
 const NEGATIVE_CHAT_ID_PREFIX = 'tg-chat-id:'
 const CHAT_ARG_COMMANDS = new Set([
-  'group-size',
   'member-count',
   'read',
   'mark-read',
@@ -191,7 +190,6 @@ cli.command('read', {
 })
 
 cli.command('member-count', {
-  aliases: ['group-size'],
   description: 'Show the number of people in a group, supergroup, or channel.',
   args: z.object({
     chat: z.string().describe(CHAT_TARGET_DESCRIPTION),
