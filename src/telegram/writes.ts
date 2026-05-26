@@ -15,12 +15,12 @@ import { normalizeInviteTargets, resolvePeer } from './resolve.js'
 function inviteFailureReason(failure: {
   premiumWouldAllowInvite?: boolean
   premiumRequiredForPm?: boolean
-}): string | null {
+}): string {
   return failure.premiumWouldAllowInvite
     ? 'premium_required'
     : failure.premiumRequiredForPm
       ? 'premium_required_for_pm'
-      : null
+      : 'privacy_restricted_invite_link_required'
 }
 
 export async function setDraft(chat: string, text: string) {
@@ -83,7 +83,7 @@ export async function createChatGroup(
       description: options?.about,
     })
 
-    let missing: Array<{ userId: string; reason: string | null }> = []
+    let missing: Array<{ userId: string; reason: string }> = []
     if (users.length > 0) {
       const failures = await addChatMembers(tg, chat.inputPeer, users, {})
       missing = failures.map((f) => ({
@@ -156,6 +156,57 @@ export async function removeChatMembers(
     chatId: String(peer.id),
     chatName: peer.displayName,
     removed,
+  }
+}
+
+export async function addChatMembersToGroup(
+  chat: string,
+  options: {
+    users: Array<string | number>
+  },
+) {
+  await assertWritable()
+  const tg = await getClient()
+  const peer = await resolvePeer(chat)
+  const users = normalizeInviteTargets(options.users)
+
+  if (users.length === 0) {
+    throw new Error('At least one user is required. Pass --user.')
+  }
+
+  const added: Array<{ user: string }> = []
+  const missing: Array<{ user: string; reason: string }> = []
+
+  for (const user of users) {
+    const failures = await addChatMembers(tg, peer.inputPeer, [user], {})
+    const failure = failures[0]
+
+    if (failure) {
+      missing.push({
+        user: String(user),
+        reason: inviteFailureReason(failure),
+      })
+      continue
+    }
+
+    added.push({ user: String(user) })
+  }
+
+  if (users.length === 1 && missing.length > 0) {
+    const [failure] = missing
+    throw new Error(
+      `Failed to add ${failure.user}${
+        failure.reason ? `: ${failure.reason}` : ''
+      }.`,
+    )
+  }
+
+  return {
+    success: true,
+    chatId: String(peer.id),
+    chatName: peer.displayName,
+    added,
+    missing,
   }
 }
 

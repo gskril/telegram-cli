@@ -18,6 +18,7 @@ export {
   unreadChats,
 } from './telegram/chats.js'
 export {
+  addChatMembersToGroup,
   createChatGroup,
   leaveChatGroup,
   removeChatMembers,
