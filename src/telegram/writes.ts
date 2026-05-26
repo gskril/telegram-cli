@@ -178,13 +178,15 @@ export async function addChatMembersToGroup(
   const missing: Array<{ user: string; reason: string }> = []
 
   for (const user of users) {
-    const failures = await addChatMembers(tg, peer.inputPeer, [user], {})
-    const failure = failures[0]
+    // mtcute returns invite restrictions as missingInvitees instead of throwing.
+    // Invite one target at a time so we can report each original input precisely.
+    const missingInvitees = await addChatMembers(tg, peer.inputPeer, [user], {})
+    const missingInvitee = missingInvitees[0]
 
-    if (failure) {
+    if (missingInvitee) {
       missing.push({
         user: String(user),
-        reason: inviteFailureReason(failure),
+        reason: inviteFailureReason(missingInvitee),
       })
       continue
     }
