@@ -1,6 +1,7 @@
 import {
   getChat,
   getChatMembers,
+  getCommonChats,
   getMe,
   iterDialogs,
   iterHistory,
@@ -199,6 +200,34 @@ export async function unreadChats(options?: {
   return {
     count: results.length,
     chats: results,
+  }
+}
+
+export async function commonChats(user: string) {
+  const tg = await getClient()
+  const peer = await resolvePeer(user)
+
+  if (peer.type !== 'user') {
+    throw new Error(
+      'Common chats are only available for users. Pass a user ID, @username, or phone number.',
+    )
+  }
+
+  const chats = await getCommonChats(tg, peer.inputPeer)
+
+  return {
+    user: {
+      id: String(peer.id),
+      name: peer.displayName,
+    },
+    count: chats.length,
+    chats: chats.map((chat) => ({
+      id: String(chat.id),
+      title: chat.displayName,
+      type: chat.chatType,
+      username: chat.username ?? null,
+      membersCount: chat.membersCount,
+    })),
   }
 }
 
