@@ -4,6 +4,7 @@ import { Cli, z } from 'incur'
 import {
   addChatMembers,
   auth,
+  commonChats,
   createChatGroup,
   getMemberCount,
   listContacts,
@@ -174,6 +175,29 @@ cli.command('read', {
     },
   ],
   run: async (c) => readChat(c.args.chat, { limit: c.options.limit }),
+})
+
+cli.command('common-chats', {
+  description:
+    'List groups, supergroups, and channels you share with a given user. Useful for auditing shared group membership before offboarding a contact.',
+  args: z.object({
+    user: z
+      .string()
+      .describe(
+        'User ID, @username, or phone number. Use "telegram contacts" if you only have a rough name.',
+      ),
+  }),
+  examples: [
+    {
+      args: { user: '@durov' },
+      description: 'List common chats with a user by username',
+    },
+    {
+      args: { user: '500894395' },
+      description: 'List common chats with a user by numeric ID',
+    },
+  ],
+  run: async (c) => commonChats(c.args.user),
 })
 
 cli.command('resolve', {
