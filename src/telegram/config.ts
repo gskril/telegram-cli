@@ -78,11 +78,28 @@ async function fileExists(filePath: string): Promise<boolean> {
   }
 }
 
+export type ReadOnlySource = 'env' | 'marker' | null
+
+export function isReadOnlyEnvSet(): boolean {
+  return process.env.TELEGRAM_READONLY === '1'
+}
+
+export async function getReadOnlySource(): Promise<ReadOnlySource> {
+  if (isReadOnlyEnvSet()) return 'env'
+  if (await fileExists(READONLY_MARKER_FILE)) return 'marker'
+  return null
+}
+
 export async function isReadOnly(): Promise<boolean> {
-  return fileExists(READONLY_MARKER_FILE)
+  return (await getReadOnlySource()) !== null
 }
 
 export async function setReadOnly(readOnly: boolean): Promise<void> {
+  if (isReadOnlyEnvSet()) {
+    // Read-only is enforced by the environment; leave the marker file alone.
+    return
+  }
+
   if (readOnly) {
     await ensureDir(STATE_DIR)
     await writeFile(READONLY_MARKER_FILE, '', { encoding: 'utf8', mode: 0o600 })
@@ -94,11 +111,18 @@ export async function setReadOnly(readOnly: boolean): Promise<void> {
 }
 
 export async function assertWritable(): Promise<void> {
-  if (await isReadOnly()) {
+  const source = await getReadOnlySource()
+  if (source === null) return
+
+  if (source === 'env') {
     throw new Error(
-      'Read-only mode is enabled for this session. Write commands are disabled. Re-run "telegram auth" without --read-only to allow writes.',
+      'Read-only mode is enforced via the TELEGRAM_READONLY environment variable. Write commands are disabled.',
     )
   }
+
+  throw new Error(
+    'Read-only mode is enabled for this session. Write commands are disabled. Re-run "telegram auth" without --read-only to allow writes.',
+  )
 }
 
 async function ensureDir(dir: string): Promise<void> {
