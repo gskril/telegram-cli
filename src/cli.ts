@@ -24,7 +24,13 @@ import {
 } from './telegram.js'
 
 const NEGATIVE_CHAT_ID_PREFIX = 'tg-chat-id:'
-const CHAT_ARG_COMMANDS = new Set(['read', 'mark-read', 'draft', 'send'])
+const CHAT_ARG_COMMANDS = new Set([
+  'read',
+  'mark-read',
+  'draft',
+  'send',
+  'common-chats',
+])
 const GROUP_CHAT_ARG_COMMANDS = new Set(['add', 'remove', 'count', 'leave'])
 const LEGACY_GROUP_COMMAND_ALIASES = new Map<string, [string, string]>([
   ['create-group', ['group', 'create']],
