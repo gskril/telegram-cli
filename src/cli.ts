@@ -23,15 +23,14 @@ import {
 } from './telegram.js'
 
 const NEGATIVE_CHAT_ID_PREFIX = 'tg-chat-id:'
-const CHAT_ARG_COMMANDS = new Set([
-  'member-count',
-  'read',
-  'mark-read',
-  'draft',
-  'send',
-  'add-members',
-  'remove-members',
-  'leave',
+const CHAT_ARG_COMMANDS = new Set(['read', 'mark-read', 'draft', 'send'])
+const GROUP_CHAT_ARG_COMMANDS = new Set(['add', 'remove', 'count', 'leave'])
+const LEGACY_GROUP_COMMAND_ALIASES = new Map<string, [string, string]>([
+  ['create-group', ['group', 'create']],
+  ['add-members', ['group', 'add']],
+  ['remove-members', ['group', 'remove']],
+  ['member-count', ['group', 'count']],
+  ['leave', ['group', 'leave']],
 ])
 const CHAT_TARGET_DESCRIPTION =
   'Prefer numeric chat ID from "telegram chats". Treat @username as an exact username; if you only have a rough name like "pavel", search with "telegram contacts" first. Use your numeric ID from "telegram whoami" for Saved Messages/self.'
@@ -59,7 +58,7 @@ cli.command('auth', {
       .boolean()
       .optional()
       .describe(
-        'Mark this session read-only: block send/create-group at the CLI layer (local guard only; session file itself still has full account access)',
+        'Mark this session read-only: block send/group write commands at the CLI layer (local guard only; session file itself still has full account access)',
       ),
   }),
   examples: [
@@ -177,24 +176,6 @@ cli.command('read', {
   run: async (c) => readChat(c.args.chat, { limit: c.options.limit }),
 })
 
-cli.command('member-count', {
-  description: 'Show the number of people in a group, supergroup, or channel.',
-  args: z.object({
-    chat: z.string().describe(CHAT_TARGET_DESCRIPTION),
-  }),
-  examples: [
-    {
-      args: { chat: '-1001234567890' },
-      description: 'Check a group by numeric ID',
-    },
-    {
-      args: { chat: '@publicgroup' },
-      description: 'Check a public group or channel by username',
-    },
-  ],
-  run: async (c) => getMemberCount(c.args.chat),
-})
-
 cli.command('resolve', {
   description:
     'Look up a Telegram identifier (username, numeric ID, or "me") and return its canonical metadata: numeric ID, display name, type, username, isSelf.',
@@ -269,25 +250,27 @@ cli.command('draft', {
   run: async (c) => setDraft(c.args.chat, c.args.text),
 })
 
-cli.command('create-group', {
+const groupCreateArgs = z.object({
+  title: z.string().describe('Group title. Wrap in quotes if it has spaces'),
+})
+const groupCreateOptions = z.object({
+  user: z
+    .array(z.string())
+    .default([])
+    .describe(
+      'User to invite. Repeat the flag for multiple users. Accepts usernames (@alice) or numeric user IDs; comma-separated values are also accepted. Required for legacy groups.',
+    ),
+  supergroup: z
+    .boolean()
+    .optional()
+    .describe('Create a supergroup instead of a legacy group'),
+  about: z.string().optional().describe('Description text. Supergroups only'),
+})
+const groupCreateCommand = {
   description:
     'Create a new Telegram group or supergroup. Prints the new chat ID so you can pipe it into send/draft. This performs a real write action.',
-  args: z.object({
-    title: z.string().describe('Group title. Wrap in quotes if it has spaces'),
-  }),
-  options: z.object({
-    user: z
-      .array(z.string())
-      .default([])
-      .describe(
-        'User to invite. Repeat the flag for multiple users. Accepts usernames (@alice) or numeric user IDs; comma-separated values are also accepted. Required for legacy groups.',
-      ),
-    supergroup: z
-      .boolean()
-      .optional()
-      .describe('Create a supergroup instead of a legacy group'),
-    about: z.string().optional().describe('Description text. Supergroups only'),
-  }),
+  args: groupCreateArgs,
+  options: groupCreateOptions,
   examples: [
     {
       args: { title: 'Team Sync' },
@@ -300,28 +283,33 @@ cli.command('create-group', {
       description: 'Create an empty supergroup with a description',
     },
   ],
-  run: async (c) =>
+  run: async (c: {
+    args: z.output<typeof groupCreateArgs>
+    options: z.output<typeof groupCreateOptions>
+  }) =>
     createChatGroup(c.args.title, {
       users: c.options.user,
       supergroup: c.options.supergroup,
       about: c.options.about,
     }),
-})
+}
 
-cli.command('add-members', {
+const groupChatArgs = z.object({
+  chat: z.string().describe(CHAT_TARGET_DESCRIPTION),
+})
+const groupAddOptions = z.object({
+  user: z
+    .array(z.string())
+    .default([])
+    .describe(
+      'User to add. Repeat the flag for multiple users. Accepts usernames (@alice) or numeric user IDs; comma-separated values are also accepted.',
+    ),
+})
+const groupAddCommand = {
   description:
     'Add one or more people to a group or supergroup. This performs a real write action.',
-  args: z.object({
-    chat: z.string().describe(CHAT_TARGET_DESCRIPTION),
-  }),
-  options: z.object({
-    user: z
-      .array(z.string())
-      .default([])
-      .describe(
-        'User to add. Repeat the flag for multiple users. Accepts usernames (@alice) or numeric user IDs; comma-separated values are also accepted.',
-      ),
-  }),
+  args: groupChatArgs,
+  options: groupAddOptions,
   examples: [
     {
       args: { chat: '-1001234567890' },
@@ -329,26 +317,28 @@ cli.command('add-members', {
       description: 'Add two members to a group',
     },
   ],
-  run: async (c) =>
+  run: async (c: {
+    args: z.output<typeof groupChatArgs>
+    options: z.output<typeof groupAddOptions>
+  }) =>
     addChatMembers(c.args.chat, {
       users: c.options.user,
     }),
-})
+}
 
-cli.command('remove-members', {
+const groupRemoveOptions = z.object({
+  user: z
+    .array(z.string())
+    .default([])
+    .describe(
+      'User to remove. Repeat the flag for multiple users. Accepts usernames (@alice) or numeric user IDs; comma-separated values are also accepted.',
+    ),
+})
+const groupRemoveCommand = {
   description:
     'Remove one or more people from a group or supergroup. This performs a real write action.',
-  args: z.object({
-    chat: z.string().describe(CHAT_TARGET_DESCRIPTION),
-  }),
-  options: z.object({
-    user: z
-      .array(z.string())
-      .default([])
-      .describe(
-        'User to remove. Repeat the flag for multiple users. Accepts usernames (@alice) or numeric user IDs; comma-separated values are also accepted.',
-      ),
-  }),
+  args: groupChatArgs,
+  options: groupRemoveOptions,
   examples: [
     {
       args: { chat: '-1001234567890' },
@@ -356,34 +346,67 @@ cli.command('remove-members', {
       description: 'Remove two members from a group',
     },
   ],
-  run: async (c) =>
+  run: async (c: {
+    args: z.output<typeof groupChatArgs>
+    options: z.output<typeof groupRemoveOptions>
+  }) =>
     removeChatMembers(c.args.chat, {
       users: c.options.user,
     }),
-})
+}
 
-cli.command('leave', {
+const groupCountCommand = {
+  description: 'Show the number of people in a group, supergroup, or channel.',
+  args: groupChatArgs,
+  examples: [
+    {
+      args: { chat: '-1001234567890' },
+      description: 'Check a group by numeric ID',
+    },
+    {
+      args: { chat: '@publicgroup' },
+      description: 'Check a public group or channel by username',
+    },
+  ],
+  run: async (c: { args: z.output<typeof groupChatArgs> }) =>
+    getMemberCount(c.args.chat),
+}
+
+const groupLeaveOptions = z.object({
+  clear: z
+    .boolean()
+    .optional()
+    .describe(
+      'Clear local history after leaving. Only applies to legacy groups',
+    ),
+})
+const groupLeaveCommand = {
   description:
     'Leave a group, supergroup, or channel. This performs a real write action.',
-  args: z.object({
-    chat: z.string().describe(CHAT_TARGET_DESCRIPTION),
-  }),
-  options: z.object({
-    clear: z
-      .boolean()
-      .optional()
-      .describe(
-        'Clear local history after leaving. Only applies to legacy groups',
-      ),
-  }),
+  args: groupChatArgs,
+  options: groupLeaveOptions,
   examples: [
     {
       args: { chat: '-1001234567890' },
       description: 'Leave a group by numeric ID',
     },
   ],
-  run: async (c) => leaveChatGroup(c.args.chat, { clear: c.options.clear }),
+  run: async (c: {
+    args: z.output<typeof groupChatArgs>
+    options: z.output<typeof groupLeaveOptions>
+  }) => leaveChatGroup(c.args.chat, { clear: c.options.clear }),
+}
+
+const group = Cli.create('group', {
+  description: 'Manage Telegram groups, supergroups, and members.',
 })
+
+group.command('create', groupCreateCommand)
+group.command('add', groupAddCommand)
+group.command('remove', groupRemoveCommand)
+group.command('count', groupCountCommand)
+group.command('leave', groupLeaveCommand)
+cli.command(group)
 
 cli.command('send', {
   description:
@@ -422,20 +445,42 @@ function normalizeArgv(argv: string[]): string[] {
   // `pnpm dev -- ...` forwards a leading separator token into process.argv.
   if (normalized[0] === '--') normalized = normalized.slice(1)
 
-  const command = normalized[0]
-  if (!command || !CHAT_ARG_COMMANDS.has(command)) return normalized
+  let command = normalized[0]
+  if (!command) return normalized
 
-  const rest = normalized.slice(1)
-
-  // Allow `telegram send -- -100... "hello"` as an escape hatch for agents.
-  if (rest[0] === '--') rest.shift()
-
-  const chat = rest[0]
-  if (chat && /^-\d+$/.test(chat)) {
-    rest[0] = `${NEGATIVE_CHAT_ID_PREFIX}${chat}`
+  const groupAlias = LEGACY_GROUP_COMMAND_ALIASES.get(command)
+  if (groupAlias) {
+    normalized = [...groupAlias, ...normalized.slice(1)]
+    command = normalized[0]
   }
 
-  return [command, ...rest]
+  if (command === 'group') {
+    const subcommand = normalized[1]
+    if (!subcommand || !GROUP_CHAT_ARG_COMMANDS.has(subcommand)) {
+      return normalized
+    }
+
+    const rest = normalizeChatArg(normalized.slice(2))
+    return [command, subcommand, ...rest]
+  }
+
+  if (!CHAT_ARG_COMMANDS.has(command)) return normalized
+
+  return [command, ...normalizeChatArg(normalized.slice(1))]
+}
+
+function normalizeChatArg(rest: string[]): string[] {
+  const normalized = [...rest]
+
+  // Allow `telegram send -- -100... "hello"` as an escape hatch for agents.
+  if (normalized[0] === '--') normalized.shift()
+
+  const chat = normalized[0]
+  if (chat && /^-\d+$/.test(chat)) {
+    normalized[0] = `${NEGATIVE_CHAT_ID_PREFIX}${chat}`
+  }
+
+  return normalized
 }
 
 async function main() {
