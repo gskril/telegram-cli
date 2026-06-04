@@ -1,5 +1,5 @@
 import {
-  addChatMembers,
+  addChatMembers as mtcuteAddChatMembers,
   createGroup as mtcuteCreateGroup,
   createSupergroup as mtcuteCreateSupergroup,
   kickChatMember,
@@ -15,12 +15,12 @@ import { normalizeInviteTargets, resolvePeer } from './resolve.js'
 function inviteFailureReason(failure: {
   premiumWouldAllowInvite?: boolean
   premiumRequiredForPm?: boolean
-}): string | null {
+}): string {
   return failure.premiumWouldAllowInvite
     ? 'premium_required'
     : failure.premiumRequiredForPm
       ? 'premium_required_for_pm'
-      : null
+      : 'privacy_restricted_invite_link_required'
 }
 
 export async function setDraft(chat: string, text: string) {
@@ -83,9 +83,9 @@ export async function createChatGroup(
       description: options?.about,
     })
 
-    let missing: Array<{ userId: string; reason: string | null }> = []
+    let missing: Array<{ userId: string; reason: string }> = []
     if (users.length > 0) {
-      const failures = await addChatMembers(tg, chat.inputPeer, users, {})
+      const failures = await mtcuteAddChatMembers(tg, chat.inputPeer, users, {})
       missing = failures.map((f) => ({
         userId: String(f.userId),
         reason: inviteFailureReason(f),
@@ -156,6 +156,60 @@ export async function removeChatMembers(
     chatId: String(peer.id),
     chatName: peer.displayName,
     removed,
+  }
+}
+
+export async function addChatMembers(
+  chat: string,
+  options: {
+    users: Array<string | number>
+  },
+) {
+  await assertWritable()
+  const tg = await getClient()
+  const peer = await resolvePeer(chat)
+  const users = normalizeInviteTargets(options.users)
+
+  if (users.length === 0) {
+    throw new Error('At least one user is required. Pass --user.')
+  }
+
+  const added: Array<{ userId: string }> = []
+  const missing: Array<{ userId: string; reason: string }> = []
+
+  for (const user of users) {
+    // mtcute returns invite restrictions as missingInvitees instead of throwing.
+    // Invite one target at a time so we can report each original input precisely.
+    const missingInvitees = await mtcuteAddChatMembers(
+      tg,
+      peer.inputPeer,
+      [user],
+      {},
+    )
+    const missingInvitee = missingInvitees[0]
+
+    if (missingInvitee) {
+      missing.push({
+        userId: String(user),
+        reason: inviteFailureReason(missingInvitee),
+      })
+      continue
+    }
+
+    added.push({ userId: String(user) })
+  }
+
+  if (added.length === 0 && missing.length > 0) {
+    const summary = missing.map((f) => `${f.userId}: ${f.reason}`).join(', ')
+    throw new Error(`Failed to add all members — ${summary}.`)
+  }
+
+  return {
+    success: true,
+    chatId: String(peer.id),
+    chatName: peer.displayName,
+    added,
+    missing,
   }
 }
 

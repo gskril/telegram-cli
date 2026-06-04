@@ -2,6 +2,7 @@
 import { Cli, z } from 'incur'
 
 import {
+  addChatMembers,
   auth,
   createChatGroup,
   getMemberCount,
@@ -28,6 +29,7 @@ const CHAT_ARG_COMMANDS = new Set([
   'mark-read',
   'draft',
   'send',
+  'add-members',
   'remove-members',
   'leave',
 ])
@@ -303,6 +305,33 @@ cli.command('create-group', {
       users: c.options.user,
       supergroup: c.options.supergroup,
       about: c.options.about,
+    }),
+})
+
+cli.command('add-members', {
+  description:
+    'Add one or more people to a group or supergroup. This performs a real write action.',
+  args: z.object({
+    chat: z.string().describe(CHAT_TARGET_DESCRIPTION),
+  }),
+  options: z.object({
+    user: z
+      .array(z.string())
+      .default([])
+      .describe(
+        'User to add. Repeat the flag for multiple users. Accepts usernames (@alice) or numeric user IDs; comma-separated values are also accepted.',
+      ),
+  }),
+  examples: [
+    {
+      args: { chat: '-1001234567890' },
+      options: { user: ['@alice', '500894395'] },
+      description: 'Add two members to a group',
+    },
+  ],
+  run: async (c) =>
+    addChatMembers(c.args.chat, {
+      users: c.options.user,
     }),
 })
 
