@@ -14,6 +14,7 @@ import {
   readChat,
   removeChatMembers,
   resolveTarget,
+  sendFile,
   sendMessage,
   shutdownClient,
   setupConfig,
@@ -23,7 +24,13 @@ import {
 } from './telegram.js'
 
 const NEGATIVE_CHAT_ID_PREFIX = 'tg-chat-id:'
-const CHAT_ARG_COMMANDS = new Set(['read', 'mark-read', 'draft', 'send'])
+const CHAT_ARG_COMMANDS = new Set([
+  'read',
+  'mark-read',
+  'draft',
+  'send',
+  'send-file',
+])
 const GROUP_CHAT_ARG_COMMANDS = new Set(['add', 'remove', 'count', 'leave'])
 const LEGACY_GROUP_COMMAND_ALIASES = new Map<string, [string, string]>([
   ['create-group', ['group', 'create']],
@@ -436,6 +443,70 @@ cli.command('send', {
   run: async (c) =>
     sendMessage(c.args.chat, c.args.text, {
       replyTo: c.options.replyTo,
+    }),
+})
+
+cli.command('send-file', {
+  description:
+    'Send a media file (photo, video, audio, or any document) to a Telegram chat, optionally with a caption or as a reply. Accepts a local file path or an http(s) URL. The media type is inferred from the file extension; use --type to override (e.g. --type document to send an image uncompressed). Prefer numeric chat ID. If you only have a rough name, use contacts first; only @username is exact. This performs a real write action, so agents should prefer read/draft flows unless they are confident a file should actually be sent.',
+  args: z.object({
+    chat: z.string().describe(CHAT_TARGET_DESCRIPTION),
+    file: z
+      .string()
+      .describe('Path to a local file, or an http(s) URL to a remote file'),
+  }),
+  options: z.object({
+    caption: z
+      .string()
+      .optional()
+      .describe('Caption text shown with the media. Wrap in quotes'),
+    replyTo: z.coerce
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe('Reply to this message ID'),
+    type: z
+      .enum([
+        'auto',
+        'photo',
+        'video',
+        'animation',
+        'audio',
+        'voice',
+        'document',
+      ])
+      .default('auto')
+      .describe(
+        'How to send the file. "auto" infers from the file extension; "document" sends any file as-is without compression',
+      ),
+    fileName: z
+      .string()
+      .optional()
+      .describe('Override the file name shown in Telegram'),
+  }),
+  examples: [
+    {
+      args: { chat: '@durov', file: './photo.jpg' },
+      description: 'Send an image as a compressed photo',
+    },
+    {
+      args: { chat: '@durov', file: './report.html' },
+      options: { caption: 'This week’s report' },
+      description: 'Send an HTML file as a document with a caption',
+    },
+    {
+      args: { chat: '-1001234567890', file: './screenshot.png' },
+      options: { type: 'document' },
+      description: 'Send an image uncompressed, as a file attachment',
+    },
+  ],
+  run: async (c) =>
+    sendFile(c.args.chat, c.args.file, {
+      caption: c.options.caption,
+      replyTo: c.options.replyTo,
+      type: c.options.type,
+      fileName: c.options.fileName,
     }),
 })
 

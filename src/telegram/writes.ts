@@ -1,3 +1,7 @@
+import { stat } from 'node:fs/promises'
+import { basename, extname, resolve as resolvePath } from 'node:path'
+
+import { InputMedia } from '@mtcute/node'
 import {
   addChatMembers as mtcuteAddChatMembers,
   createGroup as mtcuteCreateGroup,
@@ -5,6 +9,7 @@ import {
   kickChatMember,
   leaveChat as mtcuteLeaveChat,
   saveDraft,
+  sendMedia,
   sendText,
 } from '@mtcute/node/methods.js'
 
@@ -229,6 +234,112 @@ export async function leaveChatGroup(
     chatName: peer.displayName,
     leftSelf: true,
     clearedHistory: options?.clear ?? false,
+  }
+}
+
+export type SendFileMediaType =
+  | 'auto'
+  | 'photo'
+  | 'video'
+  | 'animation'
+  | 'audio'
+  | 'voice'
+  | 'document'
+
+const PHOTO_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp'])
+const VIDEO_EXTENSIONS = new Set(['.mp4', '.mov', '.m4v', '.webm', '.mkv'])
+const ANIMATION_EXTENSIONS = new Set(['.gif'])
+const AUDIO_EXTENSIONS = new Set([
+  '.mp3',
+  '.m4a',
+  '.ogg',
+  '.oga',
+  '.opus',
+  '.flac',
+  '.wav',
+])
+
+function inferMediaType(fileName: string): Exclude<SendFileMediaType, 'auto'> {
+  const extension = extname(fileName).toLowerCase()
+
+  if (PHOTO_EXTENSIONS.has(extension)) return 'photo'
+  if (VIDEO_EXTENSIONS.has(extension)) return 'video'
+  if (ANIMATION_EXTENSIONS.has(extension)) return 'animation'
+  if (AUDIO_EXTENSIONS.has(extension)) return 'audio'
+
+  return 'document'
+}
+
+export async function sendFile(
+  chat: string,
+  file: string,
+  options?: {
+    caption?: string
+    replyTo?: number
+    type?: SendFileMediaType
+    fileName?: string
+  },
+) {
+  const isRemote = /^https?:\/\//i.test(file)
+  let input: string
+  let sourceName: string
+
+  if (isRemote) {
+    input = file
+    sourceName = basename(new URL(file).pathname) || file
+  } else {
+    const absolutePath = resolvePath(file)
+    const stats = await stat(absolutePath).catch(() => null)
+
+    if (!stats?.isFile()) {
+      throw new Error(`File not found: ${absolutePath}`)
+    }
+
+    // mtcute treats a bare string as a file ID or URL; the file: prefix
+    // marks a local filesystem path.
+    input = `file:${absolutePath}`
+    sourceName = basename(absolutePath)
+  }
+
+  await assertWritable()
+  const tg = await getClient()
+  const peer = await resolvePeer(chat)
+
+  const requested = options?.type ?? 'auto'
+  const mediaType =
+    requested === 'auto' ? inferMediaType(sourceName) : requested
+  const params = {
+    caption: options?.caption,
+    fileName: options?.fileName ?? sourceName,
+  }
+
+  const media =
+    mediaType === 'photo'
+      ? InputMedia.photo(input, params)
+      : mediaType === 'video'
+        ? InputMedia.video(input, params)
+        : mediaType === 'animation'
+          ? InputMedia.animation(input, params)
+          : mediaType === 'audio'
+            ? InputMedia.audio(input, params)
+            : mediaType === 'voice'
+              ? InputMedia.voice(input, params)
+              : InputMedia.document(input, params)
+
+  const message = await sendMedia(tg, peer.inputPeer, media, {
+    replyTo: options?.replyTo,
+  })
+
+  return {
+    success: true,
+    chatId: String(peer.id),
+    chatName: peer.displayName,
+    messageId: message.id,
+    date: message.date.toISOString(),
+    replyTo: options?.replyTo ?? null,
+    mediaType,
+    file: isRemote ? file : resolvePath(file),
+    caption: options?.caption ?? null,
   }
 }
 
