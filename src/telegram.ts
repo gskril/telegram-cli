@@ -17,6 +17,7 @@ export {
   readChat,
   unreadChats,
 } from './telegram/chats.js'
+export type { AttachmentOptions, AttachmentType } from './telegram/media.js'
 export {
   addChatMembers,
   createChatGroup,

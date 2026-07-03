@@ -5,11 +5,13 @@ import {
   kickChatMember,
   leaveChat as mtcuteLeaveChat,
   saveDraft,
+  sendMedia,
   sendText,
 } from '@mtcute/node/methods.js'
 
 import { getClient } from './client.js'
 import { assertWritable } from './config.js'
+import { type AttachmentOptions, prepareAttachment } from './media.js'
 import { normalizeInviteTargets, resolvePeer } from './resolve.js'
 
 function inviteFailureReason(failure: {
@@ -23,7 +25,22 @@ function inviteFailureReason(failure: {
       : 'privacy_restricted_invite_link_required'
 }
 
-export async function setDraft(chat: string, text: string) {
+// Telegram cloud drafts are text-only: messages.saveDraft rejects uploaded
+// and external media with MEDIA_INVALID (only webpage previews are honored),
+// so drafts deliberately have no attachment support.
+export async function setDraft(
+  chat: string,
+  options: {
+    text?: string
+  },
+) {
+  const text = options.text
+  if (text === undefined) {
+    throw new Error(
+      'Provide draft text, or an empty string to clear the draft.',
+    )
+  }
+
   const tg = await getClient()
   const peer = await resolvePeer(chat)
 
@@ -234,17 +251,35 @@ export async function leaveChatGroup(
 
 export async function sendMessage(
   chat: string,
-  text: string,
-  options?: {
+  options: AttachmentOptions & {
+    text?: string
     replyTo?: number
   },
 ) {
   await assertWritable()
+
+  if (!options.file && !options.text) {
+    throw new Error('Provide message text, a file, or both.')
+  }
+
+  const attachment = options.file
+    ? await prepareAttachment(options.file, {
+        fileType: options.fileType,
+        fileName: options.fileName,
+        caption: options.text,
+      })
+    : null
+
   const tg = await getClient()
   const peer = await resolvePeer(chat)
-  const message = await sendText(tg, peer.inputPeer, text, {
-    replyTo: options?.replyTo,
-  })
+
+  const message = attachment
+    ? await sendMedia(tg, peer.inputPeer, attachment.media, {
+        replyTo: options.replyTo,
+      })
+    : await sendText(tg, peer.inputPeer, options.text ?? '', {
+        replyTo: options.replyTo,
+      })
 
   return {
     success: true,
@@ -252,7 +287,11 @@ export async function sendMessage(
     chatName: peer.displayName,
     messageId: message.id,
     date: message.date.toISOString(),
-    replyTo: options?.replyTo ?? null,
+    replyTo: options.replyTo ?? null,
     text: message.text,
+    ...(attachment && {
+      mediaType: attachment.mediaType,
+      file: attachment.file,
+    }),
   }
 }

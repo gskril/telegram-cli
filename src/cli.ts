@@ -122,8 +122,8 @@ cli.command('chats', {
 })
 
 cli.command('contacts', {
-  description:
-    'Search Telegram contacts live by name, username, or phone. Use this before send/draft when you only have a rough name; only @username is treated as an exact username.',
+  description: 'Search Telegram contacts live by name, username, or phone.',
+  hint: 'Use this before send/draft when you only have a rough name; only @username is treated as an exact username.',
   args: z.object({
     query: z
       .string()
@@ -153,8 +153,8 @@ cli.command('contacts', {
 })
 
 cli.command('read', {
-  description:
-    'Read recent messages from a chat. Prefer numeric chat ID; usernames also work when Telegram can resolve them.',
+  description: 'Read recent messages from a chat.',
+  hint: 'Prefer numeric chat IDs from "telegram chats"; usernames also work when Telegram can resolve them.',
   args: z.object({
     chat: z.string().describe(CHAT_TARGET_DESCRIPTION),
   }),
@@ -178,7 +178,8 @@ cli.command('read', {
 
 cli.command('resolve', {
   description:
-    'Look up a Telegram identifier (username, numeric ID, or "me") and return its canonical metadata: numeric ID, display name, type, username, isSelf.',
+    'Look up a Telegram identifier (username, numeric ID, or "me") and return its canonical metadata.',
+  hint: 'Returns numeric ID, display name, type, username, and isSelf. Use it to turn a @username into a numeric ID before write actions.',
   args: z.object({
     chat: z
       .string()
@@ -239,15 +240,30 @@ cli.command('mark-read', {
 })
 
 cli.command('draft', {
-  description:
-    'Save a cloud draft for a chat. Prefer numeric chat ID. If you only have a rough name, use contacts first; only @username is exact. Pass an empty string to clear it.',
+  description: 'Save a cloud text draft for a chat.',
+  hint: 'Telegram cloud drafts are text-only — the API rejects media in drafts, so use "telegram send --file" to deliver a file. Use --text "" to clear the draft. Prefer numeric chat IDs; if you only have a rough name, use contacts first — only @username is exact.',
   args: z.object({
     chat: z.string().describe(CHAT_TARGET_DESCRIPTION),
+  }),
+  options: z.object({
     text: z
       .string()
+      .optional()
       .describe('Draft text. Wrap in quotes. Use "" to clear the draft'),
   }),
-  run: async (c) => setDraft(c.args.chat, c.args.text),
+  examples: [
+    {
+      args: { chat: '500894395' },
+      options: { text: 'I will reply later' },
+      description: 'Save a text draft',
+    },
+    {
+      args: { chat: '500894395' },
+      options: { text: '' },
+      description: 'Clear the draft',
+    },
+  ],
+  run: async (c) => setDraft(c.args.chat, { text: c.options.text }),
 })
 
 const groupCreateArgs = z.object({
@@ -267,8 +283,8 @@ const groupCreateOptions = z.object({
   about: z.string().optional().describe('Description text. Supergroups only'),
 })
 const groupCreateCommand = {
-  description:
-    'Create a new Telegram group or supergroup. Prints the new chat ID so you can pipe it into send/draft. This performs a real write action.',
+  description: 'Create a new Telegram group or supergroup.',
+  hint: 'Prints the new chat ID so you can pipe it into send/draft. This performs a real write action.',
   args: groupCreateArgs,
   options: groupCreateOptions,
   examples: [
@@ -306,8 +322,8 @@ const groupAddOptions = z.object({
     ),
 })
 const groupAddCommand = {
-  description:
-    'Add one or more people to a group or supergroup. This performs a real write action.',
+  description: 'Add one or more people to a group or supergroup.',
+  hint: 'This performs a real write action and requires sufficient rights in the target group.',
   args: groupChatArgs,
   options: groupAddOptions,
   examples: [
@@ -335,8 +351,8 @@ const groupRemoveOptions = z.object({
     ),
 })
 const groupRemoveCommand = {
-  description:
-    'Remove one or more people from a group or supergroup. This performs a real write action.',
+  description: 'Remove one or more people from a group or supergroup.',
+  hint: 'This performs a real write action and requires sufficient rights in the target group.',
   args: groupChatArgs,
   options: groupRemoveOptions,
   examples: [
@@ -381,8 +397,8 @@ const groupLeaveOptions = z.object({
     ),
 })
 const groupLeaveCommand = {
-  description:
-    'Leave a group, supergroup, or channel. This performs a real write action.',
+  description: 'Leave a group, supergroup, or channel.',
+  hint: 'This performs a real write action.',
   args: groupChatArgs,
   options: groupLeaveOptions,
   examples: [
@@ -410,33 +426,88 @@ cli.command(group)
 
 cli.command('send', {
   description:
-    'Send a plain-text Telegram message, optionally as a reply. Prefer numeric chat ID. If you only have a rough name, use contacts first; only @username is exact. This performs a real write action, so agents should prefer read/draft flows unless they are confident a message should actually be sent.',
+    'Send a message to a chat: text (--text), a media file (--file), or both, optionally as a reply.',
+  hint: 'Text becomes the caption when a file is attached. Files can be local paths or http(s) URLs; the media type is inferred from the file extension, and --file-type overrides it (e.g. --file-type document sends an image uncompressed). Prefer numeric chat IDs; if you only have a rough name, use contacts first — only @username is exact. This performs a real write action, so agents should prefer read/draft flows unless they are confident a message should actually be sent.',
   args: z.object({
     chat: z.string().describe(CHAT_TARGET_DESCRIPTION),
-    text: z
-      .string()
-      .describe('Message text. Wrap in quotes if it contains spaces'),
   }),
-  options: z.object({
-    replyTo: z.coerce
-      .number()
-      .int()
-      .positive()
-      .optional()
-      .describe('Reply to this message ID'),
-  }),
+  options: z
+    .object({
+      text: z
+        .string()
+        .optional()
+        .describe(
+          'Message text, or the caption when --file is given. Wrap in quotes',
+        ),
+      file: z
+        .string()
+        .optional()
+        .describe(
+          'Attach a media file: path to a local file, or an http(s) URL to a remote file',
+        ),
+      fileType: z
+        .enum([
+          'auto',
+          'photo',
+          'video',
+          'animation',
+          'audio',
+          'voice',
+          'document',
+        ])
+        .optional()
+        .describe(
+          'How to send the attached file. Defaults to "auto", which infers from the file extension; "document" sends any file as-is without compression. Requires --file',
+        ),
+      fileName: z
+        .string()
+        .optional()
+        .describe(
+          'Override the attachment file name shown in Telegram. Requires --file',
+        ),
+      replyTo: z.coerce
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe('Reply to this message ID'),
+    })
+    .refine((v) => v.fileType === undefined || v.file !== undefined, {
+      message: '--file-type requires --file.',
+      path: ['fileType'],
+    })
+    .refine((v) => v.fileName === undefined || v.file !== undefined, {
+      message: '--file-name requires --file.',
+      path: ['fileName'],
+    }),
   examples: [
-    { args: { chat: '@durov', text: 'hello' }, description: 'Send a message' },
     {
-      args: { chat: '@durov', text: 'following up here' },
-      options: { replyTo: 42 },
+      args: { chat: '@durov' },
+      options: { text: 'hello' },
+      description: 'Send a text message',
+    },
+    {
+      args: { chat: '@durov' },
+      options: { text: 'following up here', replyTo: 42 },
       description: 'Reply to a specific message',
     },
+    {
+      args: { chat: '@durov' },
+      options: { file: './photo.jpg', text: 'check this out' },
+      description: 'Send an image as a compressed photo with a caption',
+    },
+    {
+      args: { chat: '-1001234567890' },
+      options: { file: './report.html' },
+      description: 'Send any file (e.g. HTML) as a document',
+    },
+    {
+      args: { chat: '@durov' },
+      options: { file: './screenshot.png', fileType: 'document' },
+      description: 'Send an image uncompressed, as a file attachment',
+    },
   ],
-  run: async (c) =>
-    sendMessage(c.args.chat, c.args.text, {
-      replyTo: c.options.replyTo,
-    }),
+  run: async (c) => sendMessage(c.args.chat, c.options),
 })
 
 function normalizeArgv(argv: string[]): string[] {

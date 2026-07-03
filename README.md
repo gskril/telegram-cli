@@ -24,8 +24,8 @@ npx https://pkg.pr.new/gskril/telegram-cli/telegram@main
 - `read <chat>`: read recent messages from a dialog
 - `unread`: show unread chats with a small message preview
 - `mark-read <chat>`: mark a dialog as read
-- `draft <chat> <text>`: save a Telegram cloud draft; if the target is a rough name, resolve it with `contacts` first
-- `send <chat> <text> [--reply-to <messageId>]`: send a text message, optionally as a reply; if the target is a rough name, resolve it with `contacts` first
+- `draft <chat> --text <text>`: save a Telegram cloud text draft; use `--text ""` to clear the draft. Drafts are text-only — Telegram's API rejects media in drafts — so use `send --file` to deliver a file. If the target is a rough name, resolve it with `contacts` first
+- `send <chat> [--text <text>] [--file <file>] [--reply-to <messageId>] [--file-type <type>] [--file-name <name>]`: send a message with text, a media file, or both (text becomes the caption), optionally as a reply. `--file` accepts a local path or an http(s) URL; the media type is inferred from the file extension, or force one with `--file-type <auto|photo|video|animation|audio|voice|document>` (`document` sends any file uncompressed; URL attachments support only photo and document). If the target is a rough name, resolve it with `contacts` first
 - `group create <title> [--user <user>]... [--supergroup] [--about <about>]`: create a new legacy group (default) or supergroup (`--supergroup`); repeat `--user` to invite members, and use `--about` to set a supergroup description. `--user` accepts `@username` or numeric user IDs from `contacts`/`resolve`.
 - `group add <chat> [--user <user>]...`: add people to a group or supergroup. `--user` accepts `@username` or numeric user IDs from `contacts`/`resolve`.
 - `group remove <chat> [--user <user>]...`: remove people from a group or supergroup. `--user` accepts `@username` or numeric user IDs from `contacts`/`resolve`.
@@ -87,9 +87,12 @@ pnpm dev -- contacts @durov
 pnpm dev -- resolve @username
 pnpm dev -- group count -1001234567890
 pnpm dev -- read @username --limit 10
-pnpm dev -- draft 500894395 "I will reply later"
-pnpm dev -- draft 500894395 ""
-pnpm dev -- send 500894395 "hello there" --reply-to 42
+pnpm dev -- draft 500894395 --text "I will reply later"
+pnpm dev -- draft 500894395 --text ""
+pnpm dev -- send 500894395 --text "hello there" --reply-to 42
+pnpm dev -- send 500894395 --file ./photo.jpg --text "check this out"
+pnpm dev -- send 500894395 --file ./report.html
+pnpm dev -- send 500894395 --file ./screenshot.png --file-type document
 pnpm dev -- group create "Team Sync" --user @alice --user 500894395
 # Comma-separated invitees are also accepted for convenience
 pnpm dev -- group create "Team Sync" --user @alice,500894395
@@ -105,6 +108,7 @@ pnpm dev -- group leave -1001234567890
 
 - This CLI targets a personal Telegram account, not bot-token auth.
 - `auth --read-only` enables a local guard that blocks write commands such as `send`, `group create`, `group add`, `group remove`, and `group leave`, so read-only agent flows can't accidentally fire writes. Telegram's MTProto does not support scoped user sessions, so this is a CLI-layer check only: the stored session file itself still has full account access, and anything that uses the session file outside this CLI bypasses the guard. `auth` without the flag (or `logout`) clears the marker.
+- Telegram cloud drafts are text-only: `messages.saveDraft` rejects uploaded and external media with `MEDIA_INVALID`, so `draft` has no `--file`. Use `send --file` to deliver a file.
 - `contacts <query>` searches only Telegram contacts. It does not search group names, message text, or arbitrary dialogs. Use it before `send` or `draft` when you only have a rough name like `pavel`.
 - Treat `@username` as an exact username. If you omit the `@`, the input should be treated as a rough contact search term, not an exact username.
 - Use `telegram resolve @username` to look up a numeric user or chat ID before write actions.
