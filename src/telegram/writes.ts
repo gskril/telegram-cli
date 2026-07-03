@@ -41,7 +41,7 @@ export async function setDraft(
   // carries no caption of its own.
   const attachment = options.file
     ? await prepareAttachment(options.file, {
-        type: options.type,
+        fileType: options.fileType,
         fileName: options.fileName,
       })
     : null
@@ -286,7 +286,7 @@ export type AttachmentType =
 
 export type AttachmentOptions = {
   file?: string
-  type?: AttachmentType
+  fileType?: AttachmentType
   fileName?: string
 }
 
@@ -317,7 +317,7 @@ function inferMediaType(fileName: string): Exclude<AttachmentType, 'auto'> {
 async function prepareAttachment(
   file: string,
   options: {
-    type?: AttachmentType
+    fileType?: AttachmentType
     fileName?: string
     caption?: string
   },
@@ -343,7 +343,7 @@ async function prepareAttachment(
     sourceName = basename(absolutePath)
   }
 
-  const requested = options.type ?? 'auto'
+  const requested = options.fileType ?? 'auto'
   const mediaType =
     requested === 'auto' ? inferMediaType(sourceName) : requested
   const params = {
@@ -384,7 +384,7 @@ export async function sendMessage(
 
   const attachment = options.file
     ? await prepareAttachment(options.file, {
-        type: options.type,
+        fileType: options.fileType,
         fileName: options.fileName,
         caption: options.text,
       })

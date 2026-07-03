@@ -245,7 +245,7 @@ const attachmentOptionFields = {
     .describe(
       'Attach a media file: path to a local file, or an http(s) URL to a remote file',
     ),
-  type: z
+  fileType: z
     .enum(['auto', 'photo', 'video', 'animation', 'audio', 'voice', 'document'])
     .default('auto')
     .describe(
@@ -265,9 +265,9 @@ function refineAttachmentOptions<
   >,
 >(schema: T): T {
   return schema
-    .refine((v) => v.type === 'auto' || v.file !== undefined, {
-      message: '--type requires --file.',
-      path: ['type'],
+    .refine((v) => v.fileType === 'auto' || v.file !== undefined, {
+      message: '--file-type requires --file.',
+      path: ['fileType'],
     })
     .refine((v) => v.fileName === undefined || v.file !== undefined, {
       message: '--file-name requires --file.',
@@ -316,7 +316,7 @@ cli.command('draft', {
     setDraft(c.args.chat, {
       text: c.options.text,
       file: c.options.file,
-      type: c.options.type,
+      fileType: c.options.fileType,
       fileName: c.options.fileName,
     }),
 })
@@ -481,7 +481,7 @@ cli.command(group)
 
 cli.command('send', {
   description:
-    'Send a Telegram message: text (--text), a media file (--file, from a local path or http(s) URL), or both (text becomes the caption). The media type is inferred from the file extension; use --type to override (e.g. --type document to send an image uncompressed). Optionally send as a reply. Prefer numeric chat ID. If you only have a rough name, use contacts first; only @username is exact. This performs a real write action, so agents should prefer read/draft flows unless they are confident a message should actually be sent.',
+    'Send a Telegram message: text (--text), a media file (--file, from a local path or http(s) URL), or both (text becomes the caption). The media type is inferred from the file extension; use --file-type to override (e.g. --file-type document to send an image uncompressed). Optionally send as a reply. Prefer numeric chat ID. If you only have a rough name, use contacts first; only @username is exact. This performs a real write action, so agents should prefer read/draft flows unless they are confident a message should actually be sent.',
   args: z.object({
     chat: z.string().describe(CHAT_TARGET_DESCRIPTION),
   }),
@@ -527,7 +527,7 @@ cli.command('send', {
     },
     {
       args: { chat: '@durov' },
-      options: { file: './screenshot.png', type: 'document' },
+      options: { file: './screenshot.png', fileType: 'document' },
       description: 'Send an image uncompressed, as a file attachment',
     },
   ],
@@ -535,7 +535,7 @@ cli.command('send', {
     sendMessage(c.args.chat, {
       text: c.options.text,
       file: c.options.file,
-      type: c.options.type,
+      fileType: c.options.fileType,
       fileName: c.options.fileName,
       replyTo: c.options.replyTo,
     }),

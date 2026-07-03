@@ -24,8 +24,8 @@ npx https://pkg.pr.new/gskril/telegram-cli/telegram@main
 - `read <chat>`: read recent messages from a dialog
 - `unread`: show unread chats with a small message preview
 - `mark-read <chat>`: mark a dialog as read
-- `draft <chat> [--text <text>] [--file <file>] [--type <type>] [--file-name <name>]`: save a Telegram cloud draft with text, a media file, or both (text becomes the caption); use `--text ""` with no `--file` to clear the draft; if the target is a rough name, resolve it with `contacts` first
-- `send <chat> [--text <text>] [--file <file>] [--reply-to <messageId>] [--type <type>] [--file-name <name>]`: send a message with text, a media file (photo, video, audio, or any document, e.g. HTML, from a local path or http(s) URL), or both (text becomes the caption), optionally as a reply; the media type is inferred from the file extension, or force one with `--type <auto|photo|video|animation|audio|voice|document>` (`document` sends any file uncompressed); if the target is a rough name, resolve it with `contacts` first
+- `draft <chat> [--text <text>] [--file <file>] [--file-type <type>] [--file-name <name>]`: save a Telegram cloud draft with text, a media file, or both (text becomes the caption); use `--text ""` with no `--file` to clear the draft; if the target is a rough name, resolve it with `contacts` first
+- `send <chat> [--text <text>] [--file <file>] [--reply-to <messageId>] [--file-type <type>] [--file-name <name>]`: send a message with text, a media file (photo, video, audio, or any document, e.g. HTML, from a local path or http(s) URL), or both (text becomes the caption), optionally as a reply; the media type is inferred from the file extension, or force one with `--file-type <auto|photo|video|animation|audio|voice|document>` (`document` sends any file uncompressed); if the target is a rough name, resolve it with `contacts` first
 - `group create <title> [--user <user>]... [--supergroup] [--about <about>]`: create a new legacy group (default) or supergroup (`--supergroup`); repeat `--user` to invite members, and use `--about` to set a supergroup description. `--user` accepts `@username` or numeric user IDs from `contacts`/`resolve`.
 - `group add <chat> [--user <user>]...`: add people to a group or supergroup. `--user` accepts `@username` or numeric user IDs from `contacts`/`resolve`.
 - `group remove <chat> [--user <user>]...`: remove people from a group or supergroup. `--user` accepts `@username` or numeric user IDs from `contacts`/`resolve`.
@@ -93,7 +93,7 @@ pnpm dev -- draft 500894395 --text ""
 pnpm dev -- send 500894395 --text "hello there" --reply-to 42
 pnpm dev -- send 500894395 --file ./photo.jpg --text "check this out"
 pnpm dev -- send 500894395 --file ./report.html
-pnpm dev -- send 500894395 --file ./screenshot.png --type document
+pnpm dev -- send 500894395 --file ./screenshot.png --file-type document
 pnpm dev -- group create "Team Sync" --user @alice --user 500894395
 # Comma-separated invitees are also accepted for convenience
 pnpm dev -- group create "Team Sync" --user @alice,500894395
