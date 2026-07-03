@@ -11,7 +11,6 @@ import {
   saveDraft,
   sendMedia,
   sendText,
-  uploadMedia,
 } from '@mtcute/node/methods.js'
 
 import { getClient } from './client.js'
@@ -29,54 +28,32 @@ function inviteFailureReason(failure: {
       : 'privacy_restricted_invite_link_required'
 }
 
+// Telegram cloud drafts are text-only: messages.saveDraft rejects uploaded
+// and external media with MEDIA_INVALID (only webpage previews are honored),
+// so drafts deliberately have no attachment support.
 export async function setDraft(
   chat: string,
-  options: AttachmentOptions & {
+  options: {
     text?: string
   },
 ) {
-  const text = options.text ?? ''
-
-  // The draft text doubles as the media caption, so the attachment itself
-  // carries no caption of its own.
-  const attachment = options.file
-    ? await prepareAttachment(options.file, {
-        fileType: options.fileType,
-        fileName: options.fileName,
-      })
-    : null
+  const text = options.text
+  if (text === undefined) {
+    throw new Error(
+      'Provide draft text, or an empty string to clear the draft.',
+    )
+  }
 
   const tg = await getClient()
   const peer = await resolvePeer(chat)
 
-  if (!attachment && text.length === 0) {
+  if (text.length === 0) {
     await saveDraft(tg, peer.inputPeer, null)
     return {
       success: true,
       action: 'cleared',
       chatId: String(peer.id),
       chatName: peer.displayName,
-    }
-  }
-
-  if (attachment) {
-    // Drafts reference already-uploaded media, so upload the file first.
-    const uploaded = await uploadMedia(tg, attachment.media, {
-      peer: peer.inputPeer,
-    })
-    await saveDraft(tg, peer.inputPeer, {
-      message: text,
-      media: uploaded.inputMedia,
-    })
-
-    return {
-      success: true,
-      action: 'saved',
-      chatId: String(peer.id),
-      chatName: peer.displayName,
-      text,
-      mediaType: attachment.mediaType,
-      file: attachment.file,
     }
   }
 
@@ -323,12 +300,37 @@ async function prepareAttachment(
   },
 ) {
   const isRemote = /^https?:\/\//i.test(file)
+  const requested = options.fileType ?? 'auto'
   let input: string
   let sourceName: string
+  let sourcePath: string
 
   if (isRemote) {
+    // Telegram fetches URLs server-side as external media, which only
+    // supports photos and documents and ignores custom file names.
+    if (
+      requested !== 'auto' &&
+      requested !== 'photo' &&
+      requested !== 'document'
+    ) {
+      throw new Error(
+        `File type "${requested}" is not supported for URL attachments; only photo and document are. Download the file first to send it as ${requested}.`,
+      )
+    }
+    if (options.fileName !== undefined) {
+      throw new Error('--file-name is not supported for URL attachments.')
+    }
+
+    let url: URL
+    try {
+      url = new URL(file)
+    } catch {
+      throw new Error(`Invalid file URL: ${file}`)
+    }
+
     input = file
-    sourceName = basename(new URL(file).pathname) || file
+    sourcePath = file
+    sourceName = basename(url.pathname) || file
   } else {
     const absolutePath = resolvePath(file)
     const stats = await stat(absolutePath).catch(() => null)
@@ -340,12 +342,12 @@ async function prepareAttachment(
     // mtcute treats a bare string as a file ID or URL; the file: prefix
     // marks a local filesystem path.
     input = `file:${absolutePath}`
+    sourcePath = absolutePath
     sourceName = basename(absolutePath)
   }
 
-  const requested = options.fileType ?? 'auto'
-  const mediaType =
-    requested === 'auto' ? inferMediaType(sourceName) : requested
+  let mediaType = requested === 'auto' ? inferMediaType(sourceName) : requested
+  if (isRemote && mediaType !== 'photo') mediaType = 'document'
   const params = {
     caption: options.caption,
     fileName: options.fileName ?? sourceName,
@@ -367,7 +369,7 @@ async function prepareAttachment(
   return {
     media,
     mediaType,
-    file: isRemote ? file : resolvePath(file),
+    file: sourcePath,
   }
 }
 
@@ -378,6 +380,8 @@ export async function sendMessage(
     replyTo?: number
   },
 ) {
+  await assertWritable()
+
   if (!options.file && !options.text) {
     throw new Error('Provide message text, a file, or both.')
   }
@@ -390,7 +394,6 @@ export async function sendMessage(
       })
     : null
 
-  await assertWritable()
   const tg = await getClient()
   const peer = await resolvePeer(chat)
 
