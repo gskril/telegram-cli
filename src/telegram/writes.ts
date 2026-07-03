@@ -11,6 +11,7 @@ import {
   saveDraft,
   sendMedia,
   sendText,
+  uploadMedia,
 } from '@mtcute/node/methods.js'
 
 import { getClient } from './client.js'
@@ -28,17 +29,54 @@ function inviteFailureReason(failure: {
       : 'privacy_restricted_invite_link_required'
 }
 
-export async function setDraft(chat: string, text: string) {
+export async function setDraft(
+  chat: string,
+  options: AttachmentOptions & {
+    text?: string
+  },
+) {
+  const text = options.text ?? ''
+
+  // The draft text doubles as the media caption, so the attachment itself
+  // carries no caption of its own.
+  const attachment = options.file
+    ? await prepareAttachment(options.file, {
+        type: options.type,
+        fileName: options.fileName,
+      })
+    : null
+
   const tg = await getClient()
   const peer = await resolvePeer(chat)
 
-  if (text.length === 0) {
+  if (!attachment && text.length === 0) {
     await saveDraft(tg, peer.inputPeer, null)
     return {
       success: true,
       action: 'cleared',
       chatId: String(peer.id),
       chatName: peer.displayName,
+    }
+  }
+
+  if (attachment) {
+    // Drafts reference already-uploaded media, so upload the file first.
+    const uploaded = await uploadMedia(tg, attachment.media, {
+      peer: peer.inputPeer,
+    })
+    await saveDraft(tg, peer.inputPeer, {
+      message: text,
+      media: uploaded.inputMedia,
+    })
+
+    return {
+      success: true,
+      action: 'saved',
+      chatId: String(peer.id),
+      chatName: peer.displayName,
+      text,
+      mediaType: attachment.mediaType,
+      file: attachment.file,
     }
   }
 
@@ -237,7 +275,7 @@ export async function leaveChatGroup(
   }
 }
 
-export type SendFileMediaType =
+export type AttachmentType =
   | 'auto'
   | 'photo'
   | 'video'
@@ -245,6 +283,12 @@ export type SendFileMediaType =
   | 'audio'
   | 'voice'
   | 'document'
+
+export type AttachmentOptions = {
+  file?: string
+  type?: AttachmentType
+  fileName?: string
+}
 
 const PHOTO_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp'])
 const VIDEO_EXTENSIONS = new Set(['.mp4', '.mov', '.m4v', '.webm', '.mkv'])
@@ -259,7 +303,7 @@ const AUDIO_EXTENSIONS = new Set([
   '.wav',
 ])
 
-function inferMediaType(fileName: string): Exclude<SendFileMediaType, 'auto'> {
+function inferMediaType(fileName: string): Exclude<AttachmentType, 'auto'> {
   const extension = extname(fileName).toLowerCase()
 
   if (PHOTO_EXTENSIONS.has(extension)) return 'photo'
@@ -270,14 +314,12 @@ function inferMediaType(fileName: string): Exclude<SendFileMediaType, 'auto'> {
   return 'document'
 }
 
-export async function sendFile(
-  chat: string,
+async function prepareAttachment(
   file: string,
-  options?: {
-    caption?: string
-    replyTo?: number
-    type?: SendFileMediaType
+  options: {
+    type?: AttachmentType
     fileName?: string
+    caption?: string
   },
 ) {
   const isRemote = /^https?:\/\//i.test(file)
@@ -301,16 +343,12 @@ export async function sendFile(
     sourceName = basename(absolutePath)
   }
 
-  await assertWritable()
-  const tg = await getClient()
-  const peer = await resolvePeer(chat)
-
-  const requested = options?.type ?? 'auto'
+  const requested = options.type ?? 'auto'
   const mediaType =
     requested === 'auto' ? inferMediaType(sourceName) : requested
   const params = {
-    caption: options?.caption,
-    fileName: options?.fileName ?? sourceName,
+    caption: options.caption,
+    fileName: options.fileName ?? sourceName,
   }
 
   const media =
@@ -326,36 +364,43 @@ export async function sendFile(
               ? InputMedia.voice(input, params)
               : InputMedia.document(input, params)
 
-  const message = await sendMedia(tg, peer.inputPeer, media, {
-    replyTo: options?.replyTo,
-  })
-
   return {
-    success: true,
-    chatId: String(peer.id),
-    chatName: peer.displayName,
-    messageId: message.id,
-    date: message.date.toISOString(),
-    replyTo: options?.replyTo ?? null,
+    media,
     mediaType,
     file: isRemote ? file : resolvePath(file),
-    caption: options?.caption ?? null,
   }
 }
 
 export async function sendMessage(
   chat: string,
-  text: string,
-  options?: {
+  options: AttachmentOptions & {
+    text?: string
     replyTo?: number
   },
 ) {
+  if (!options.file && !options.text) {
+    throw new Error('Provide message text, a file, or both.')
+  }
+
+  const attachment = options.file
+    ? await prepareAttachment(options.file, {
+        type: options.type,
+        fileName: options.fileName,
+        caption: options.text,
+      })
+    : null
+
   await assertWritable()
   const tg = await getClient()
   const peer = await resolvePeer(chat)
-  const message = await sendText(tg, peer.inputPeer, text, {
-    replyTo: options?.replyTo,
-  })
+
+  const message = attachment
+    ? await sendMedia(tg, peer.inputPeer, attachment.media, {
+        replyTo: options.replyTo,
+      })
+    : await sendText(tg, peer.inputPeer, options.text ?? '', {
+        replyTo: options.replyTo,
+      })
 
   return {
     success: true,
@@ -363,7 +408,11 @@ export async function sendMessage(
     chatName: peer.displayName,
     messageId: message.id,
     date: message.date.toISOString(),
-    replyTo: options?.replyTo ?? null,
+    replyTo: options.replyTo ?? null,
     text: message.text,
+    ...(attachment && {
+      mediaType: attachment.mediaType,
+      file: attachment.file,
+    }),
   }
 }

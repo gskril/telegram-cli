@@ -14,7 +14,6 @@ import {
   readChat,
   removeChatMembers,
   resolveTarget,
-  sendFile,
   sendMessage,
   shutdownClient,
   setupConfig,
@@ -24,13 +23,7 @@ import {
 } from './telegram.js'
 
 const NEGATIVE_CHAT_ID_PREFIX = 'tg-chat-id:'
-const CHAT_ARG_COMMANDS = new Set([
-  'read',
-  'mark-read',
-  'draft',
-  'send',
-  'send-file',
-])
+const CHAT_ARG_COMMANDS = new Set(['read', 'mark-read', 'draft', 'send'])
 const GROUP_CHAT_ARG_COMMANDS = new Set(['add', 'remove', 'count', 'leave'])
 const LEGACY_GROUP_COMMAND_ALIASES = new Map<string, [string, string]>([
   ['create-group', ['group', 'create']],
@@ -245,16 +238,87 @@ cli.command('mark-read', {
   run: async (c) => markRead(c.args.chat, { maxId: c.options.maxId }),
 })
 
+const attachmentOptionFields = {
+  file: z
+    .string()
+    .optional()
+    .describe(
+      'Attach a media file: path to a local file, or an http(s) URL to a remote file',
+    ),
+  type: z
+    .enum(['auto', 'photo', 'video', 'animation', 'audio', 'voice', 'document'])
+    .default('auto')
+    .describe(
+      'How to send the attached file. "auto" infers from the file extension; "document" sends any file as-is without compression. Requires --file',
+    ),
+  fileName: z
+    .string()
+    .optional()
+    .describe(
+      'Override the attachment file name shown in Telegram. Requires --file',
+    ),
+}
+
+function refineAttachmentOptions<
+  T extends z.ZodObject<
+    typeof attachmentOptionFields & Record<string, z.ZodType>
+  >,
+>(schema: T): T {
+  return schema
+    .refine((v) => v.type === 'auto' || v.file !== undefined, {
+      message: '--type requires --file.',
+      path: ['type'],
+    })
+    .refine((v) => v.fileName === undefined || v.file !== undefined, {
+      message: '--file-name requires --file.',
+      path: ['fileName'],
+    }) as T
+}
+
 cli.command('draft', {
   description:
-    'Save a cloud draft for a chat. Prefer numeric chat ID. If you only have a rough name, use contacts first; only @username is exact. Pass an empty string to clear it.',
+    'Save a cloud draft for a chat, as text (--text), a media file (--file), or both. Prefer numeric chat ID. If you only have a rough name, use contacts first; only @username is exact. Use --text "" with no --file to clear the draft.',
   args: z.object({
     chat: z.string().describe(CHAT_TARGET_DESCRIPTION),
-    text: z
-      .string()
-      .describe('Draft text. Wrap in quotes. Use "" to clear the draft'),
   }),
-  run: async (c) => setDraft(c.args.chat, c.args.text),
+  options: refineAttachmentOptions(
+    z.object({
+      text: z
+        .string()
+        .optional()
+        .describe(
+          'Draft text, or the caption when --file is given. Wrap in quotes. Use "" (with no --file) to clear the draft',
+        ),
+      ...attachmentOptionFields,
+    }),
+  ).refine((v) => v.text !== undefined || v.file !== undefined, {
+    message:
+      'Provide --text, --file, or both. Use --text "" to clear the draft.',
+  }),
+  examples: [
+    {
+      args: { chat: '500894395' },
+      options: { text: 'I will reply later' },
+      description: 'Save a text draft',
+    },
+    {
+      args: { chat: '500894395' },
+      options: { file: './photo.jpg', text: 'sneak peek' },
+      description: 'Draft a photo with a caption',
+    },
+    {
+      args: { chat: '500894395' },
+      options: { text: '' },
+      description: 'Clear the draft',
+    },
+  ],
+  run: async (c) =>
+    setDraft(c.args.chat, {
+      text: c.options.text,
+      file: c.options.file,
+      type: c.options.type,
+      fileName: c.options.fileName,
+    }),
 })
 
 const groupCreateArgs = z.object({
@@ -417,96 +481,63 @@ cli.command(group)
 
 cli.command('send', {
   description:
-    'Send a plain-text Telegram message, optionally as a reply. Prefer numeric chat ID. If you only have a rough name, use contacts first; only @username is exact. This performs a real write action, so agents should prefer read/draft flows unless they are confident a message should actually be sent.',
+    'Send a Telegram message: text (--text), a media file (--file, from a local path or http(s) URL), or both (text becomes the caption). The media type is inferred from the file extension; use --type to override (e.g. --type document to send an image uncompressed). Optionally send as a reply. Prefer numeric chat ID. If you only have a rough name, use contacts first; only @username is exact. This performs a real write action, so agents should prefer read/draft flows unless they are confident a message should actually be sent.',
   args: z.object({
     chat: z.string().describe(CHAT_TARGET_DESCRIPTION),
-    text: z
-      .string()
-      .describe('Message text. Wrap in quotes if it contains spaces'),
   }),
-  options: z.object({
-    replyTo: z.coerce
-      .number()
-      .int()
-      .positive()
-      .optional()
-      .describe('Reply to this message ID'),
+  options: refineAttachmentOptions(
+    z.object({
+      text: z
+        .string()
+        .optional()
+        .describe(
+          'Message text, or the caption when --file is given. Wrap in quotes',
+        ),
+      ...attachmentOptionFields,
+      replyTo: z.coerce
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe('Reply to this message ID'),
+    }),
+  ).refine((v) => Boolean(v.text) || v.file !== undefined, {
+    message: 'Provide --text, --file, or both.',
   }),
   examples: [
-    { args: { chat: '@durov', text: 'hello' }, description: 'Send a message' },
     {
-      args: { chat: '@durov', text: 'following up here' },
-      options: { replyTo: 42 },
+      args: { chat: '@durov' },
+      options: { text: 'hello' },
+      description: 'Send a text message',
+    },
+    {
+      args: { chat: '@durov' },
+      options: { text: 'following up here', replyTo: 42 },
       description: 'Reply to a specific message',
     },
-  ],
-  run: async (c) =>
-    sendMessage(c.args.chat, c.args.text, {
-      replyTo: c.options.replyTo,
-    }),
-})
-
-cli.command('send-file', {
-  description:
-    'Send a media file (photo, video, audio, or any document) to a Telegram chat, optionally with a caption or as a reply. Accepts a local file path or an http(s) URL. The media type is inferred from the file extension; use --type to override (e.g. --type document to send an image uncompressed). Prefer numeric chat ID. If you only have a rough name, use contacts first; only @username is exact. This performs a real write action, so agents should prefer read/draft flows unless they are confident a file should actually be sent.',
-  args: z.object({
-    chat: z.string().describe(CHAT_TARGET_DESCRIPTION),
-    file: z
-      .string()
-      .describe('Path to a local file, or an http(s) URL to a remote file'),
-  }),
-  options: z.object({
-    caption: z
-      .string()
-      .optional()
-      .describe('Caption text shown with the media. Wrap in quotes'),
-    replyTo: z.coerce
-      .number()
-      .int()
-      .positive()
-      .optional()
-      .describe('Reply to this message ID'),
-    type: z
-      .enum([
-        'auto',
-        'photo',
-        'video',
-        'animation',
-        'audio',
-        'voice',
-        'document',
-      ])
-      .default('auto')
-      .describe(
-        'How to send the file. "auto" infers from the file extension; "document" sends any file as-is without compression',
-      ),
-    fileName: z
-      .string()
-      .optional()
-      .describe('Override the file name shown in Telegram'),
-  }),
-  examples: [
     {
-      args: { chat: '@durov', file: './photo.jpg' },
-      description: 'Send an image as a compressed photo',
+      args: { chat: '@durov' },
+      options: { file: './photo.jpg', text: 'check this out' },
+      description: 'Send an image as a compressed photo with a caption',
     },
     {
-      args: { chat: '@durov', file: './report.html' },
-      options: { caption: 'This week’s report' },
-      description: 'Send an HTML file as a document with a caption',
+      args: { chat: '-1001234567890' },
+      options: { file: './report.html' },
+      description: 'Send any file (e.g. HTML) as a document',
     },
     {
-      args: { chat: '-1001234567890', file: './screenshot.png' },
-      options: { type: 'document' },
+      args: { chat: '@durov' },
+      options: { file: './screenshot.png', type: 'document' },
       description: 'Send an image uncompressed, as a file attachment',
     },
   ],
   run: async (c) =>
-    sendFile(c.args.chat, c.args.file, {
-      caption: c.options.caption,
-      replyTo: c.options.replyTo,
+    sendMessage(c.args.chat, {
+      text: c.options.text,
+      file: c.options.file,
       type: c.options.type,
       fileName: c.options.fileName,
+      replyTo: c.options.replyTo,
     }),
 })
 

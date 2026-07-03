@@ -17,13 +17,12 @@ export {
   readChat,
   unreadChats,
 } from './telegram/chats.js'
-export type { SendFileMediaType } from './telegram/writes.js'
+export type { AttachmentOptions, AttachmentType } from './telegram/writes.js'
 export {
   addChatMembers,
   createChatGroup,
   leaveChatGroup,
   removeChatMembers,
-  sendFile,
   sendMessage,
   setDraft,
 } from './telegram/writes.js'
