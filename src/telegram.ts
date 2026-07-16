@@ -11,6 +11,7 @@ export type { ResolvedPeer, ResolvedTarget } from './telegram/resolve.js'
 export { resolvePeer, resolveTarget } from './telegram/resolve.js'
 export { listContacts } from './telegram/contacts.js'
 export {
+  commonChats,
   getMemberCount,
   listChats,
   markRead,

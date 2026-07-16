@@ -3,8 +3,9 @@ import { getMe, logOut } from '@mtcute/node/methods.js'
 import {
   getConfigFile,
   getDataDir,
+  getReadOnlySource,
   getStorageFile,
-  isReadOnly,
+  isReadOnlyEnvSet,
   setReadOnly,
 } from './config.js'
 import {
@@ -18,15 +19,24 @@ import {
 export async function auth(options?: { force?: boolean; readOnly?: boolean }) {
   const tg = await authClient({ forceLogin: options?.force })
   const me = await getMe(tg)
-  const readOnly = Boolean(options?.readOnly)
-  await setReadOnly(readOnly)
+
+  if (isReadOnlyEnvSet() && options?.readOnly === false) {
+    console.error(
+      'Warning: ignoring --read-only=false because TELEGRAM_READONLY=1 is set in the environment.',
+    )
+  }
+
+  await setReadOnly(Boolean(options?.readOnly))
+
+  const readOnlySource = await getReadOnlySource()
 
   return {
     authenticated: true,
     id: me.id,
     displayName: me.displayName,
     username: me.username ?? null,
-    readOnly,
+    readOnly: readOnlySource !== null,
+    readOnlySource,
     configFile: getConfigFile(),
     storageFile: getStorageFile(),
   }
@@ -55,7 +65,7 @@ export async function logout() {
 export async function whoAmI() {
   const tg = await getClient()
   const me = await getMe(tg)
-  const readOnly = await isReadOnly()
+  const readOnlySource = await getReadOnlySource()
 
   return {
     authenticated: true,
@@ -64,7 +74,8 @@ export async function whoAmI() {
     username: me.username ?? null,
     isPremium: me.isPremium,
     isBot: me.isBot,
-    readOnly,
+    readOnly: readOnlySource !== null,
+    readOnlySource,
     configFile: getConfigFile(),
     storageFile: getStorageFile(),
     dataDir: getDataDir(),
