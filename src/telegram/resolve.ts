@@ -67,22 +67,32 @@ async function resolveUserOrChat(parsed: string | number) {
   return await getChat(tg, parsed)
 }
 
-export async function resolvePeer(chat: string): Promise<ResolvedPeer> {
-  const tg = await getClient()
-  const parsed = parseChatId(chat)
+// Bounds the fallback dialog scan below. Each page of 100 dialogs costs one
+// sequential messages.getDialogs RPC, an endpoint Telegram flood-limits
+// aggressively, so an unbounded scan on a large account risks multi-second
+// lookups and FLOOD_WAIT stalls. 200 keeps a miss to two round-trips.
+const DIALOG_SCAN_LIMIT = 200
 
-  if (typeof parsed === 'number') {
-    for await (const dialog of iterDialogs(tg, { limit: 200 })) {
-      if (dialog.peer.id === parsed) {
-        return {
-          id: dialog.peer.id,
-          displayName: dialog.peer.displayName,
-          inputPeer: dialog.peer.inputPeer,
-          type: dialog.peer.type,
-        }
+async function findPeerInDialogs(id: number): Promise<ResolvedPeer | null> {
+  const tg = await getClient()
+
+  for await (const dialog of iterDialogs(tg, { limit: DIALOG_SCAN_LIMIT })) {
+    if (dialog.peer.id === id) {
+      return {
+        id: dialog.peer.id,
+        displayName: dialog.peer.displayName,
+        inputPeer: dialog.peer.inputPeer,
+        type: dialog.peer.type,
       }
     }
   }
+
+  return null
+}
+
+export async function resolvePeer(chat: string): Promise<ResolvedPeer> {
+  const tg = await getClient()
+  const parsed = parseChatId(chat)
 
   try {
     const peer = await resolveUserOrChat(parsed)
@@ -93,6 +103,13 @@ export async function resolvePeer(chat: string): Promise<ResolvedPeer> {
       type: peer.type,
     }
   } catch (error) {
+    // Bare numeric IDs fail direct resolution when the peer's access_hash
+    // isn't in the local cache; scanning recent dialogs can still find it.
+    if (typeof parsed === 'number') {
+      const fromDialogs = await findPeerInDialogs(parsed)
+      if (fromDialogs) return fromDialogs
+    }
+
     if (typeof parsed === 'string') {
       const me = await getMe(tg)
       const normalizedChat = normalizeUsername(parsed)

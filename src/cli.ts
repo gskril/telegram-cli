@@ -105,7 +105,6 @@ cli.command('chats', {
     limit: z.coerce
       .number()
       .min(1)
-      .max(200)
       .default(20)
       .describe('Maximum chats to return'),
     unreadOnly: z.boolean().optional().describe('Only show unread chats'),
