@@ -29,17 +29,17 @@
     "node": ">=22.18.0"
   },
   "dependencies": {
-    "@mtcute/wasm": "^0.29.0",
+    "@mtcute/wasm": "^0.31.0",
     "better-sqlite3": "^12.9.0"
   },
   "devDependencies": {
-    "@mtcute/node": "^0.29.6",
+    "@mtcute/node": "^0.31.0",
     "@types/node": "^25.6.0",
     "dotenv": "^17.4.2",
     "incur": "^0.4.6",
     "prettier": "^3.8.3",
     "tsdown": "^0.21.8",
-    "tsx": "^4.21.0",
+    "tsx": "^4.23.12",
     "typescript": "^6.0.2",
     "zod": "^4.3.6"
   }
