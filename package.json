@@ -29,11 +29,11 @@
     "node": ">=22.18.0"
   },
   "dependencies": {
-    "@mtcute/wasm": "^0.31.0",
-    "better-sqlite3": "^12.9.0"
+    "@mtcute/wasm": "^0.32.0",
+    "better-sqlite3": "^13.0.3"
   },
   "devDependencies": {
-    "@mtcute/node": "^0.31.0",
+    "@mtcute/node": "^0.32.0",
     "@types/node": "^25.6.0",
     "dotenv": "^17.4.2",
     "incur": "^0.4.6",
@@ -41,6 +41,6 @@
     "tsdown": "^0.21.8",
     "tsx": "^4.23.12",
     "typescript": "^6.0.2",
-    "zod": "^4.3.6"
+    "zod": "4.5.1"
   }
 }
