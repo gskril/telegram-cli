@@ -1,5 +1,4 @@
-import { Chat, type Dialog } from '@mtcute/node'
-
+import { Chat, Dialog, getMarkedPeerId } from '@mtcute/node'
 import {
   getChat,
   getChatMembers,
@@ -14,18 +13,47 @@ import {
 import { getClient } from './client.js'
 import { iterCommonChats } from './common-chats.js'
 import { resolvePeer } from './resolve.js'
+import { resolveFolder } from './folders.js'
+
+function isUnread(dialog: { unreadCount: number; isManuallyUnread: boolean }) {
+  // mtcute 0.32.0's isUnread incorrectly checks unreadCount > 1.
+  return dialog.unreadCount > 0 || Boolean(dialog.isManuallyUnread)
+}
 
 export async function listChats(options?: {
   limit?: number
   unreadOnly?: boolean
   with?: string
   all?: boolean
+  folder?: string
 }) {
   if (options?.all && options.limit !== undefined) {
     throw new Error('--all cannot be combined with --limit.')
   }
   const limit = options?.all ? Infinity : (options?.limit ?? 20)
   const tg = await getClient()
+  const folder =
+    options?.folder === undefined
+      ? undefined
+      : await resolveFolder(options.folder)
+  // Normalize shared folders to the equivalent explicit-peer filter. mtcute's
+  // InputDialogFolder type does not accept the shared-folder constructor.
+  const dialogFolder =
+    folder?._ === 'dialogFilterDefault'
+      ? undefined
+      : folder?._ === 'dialogFilterChatlist'
+        ? { ...folder, _: 'dialogFilter' as const, excludePeers: [] }
+        : folder
+  // Apply excludeRead ourselves to include single-unread-message dialogs,
+  // while preserving Telegram's explicit inclusion/pinning overrides.
+  const excludeRead = folder?._ === 'dialogFilter' && folder.excludeRead
+  const explicitPeers = new Set(
+    folder && folder._ !== 'dialogFilterDefault'
+      ? [...folder.includePeers, ...folder.pinnedPeers].map((peer) =>
+          getMarkedPeerId(peer),
+        )
+      : [],
+  )
   const chats: Array<{
     id: string
     name: string
@@ -38,19 +66,46 @@ export async function listChats(options?: {
     lastMessageDate?: string | null
   }> = []
 
+  const effectiveFolder =
+    excludeRead && dialogFolder?._ === 'dialogFilter'
+      ? { ...dialogFolder, excludeRead: false }
+      : dialogFolder
+  // The folder iterator handles pinned chats separately. When filtering shared
+  // dialogs directly, include pinned peers explicitly to preserve that behavior.
+  const matchesFolder = effectiveFolder
+    ? Dialog.filterFolder(
+        {
+          ...effectiveFolder,
+          includePeers: [
+            ...effectiveFolder.includePeers,
+            ...effectiveFolder.pinnedPeers,
+          ],
+        },
+        false,
+      )
+    : undefined
   const dialogs = options?.with
-    ? iterSharedDialogs(options.with, options.unreadOnly ? undefined : limit)
-    : iterDialogs(tg, { limit: options?.unreadOnly ? Infinity : limit })
+    ? iterSharedDialogs(
+        options.with,
+        options.unreadOnly || effectiveFolder ? undefined : limit,
+      )
+    : iterDialogs(tg, {
+        folder: effectiveFolder,
+        limit: options?.unreadOnly || excludeRead ? Infinity : limit,
+      })
 
   for await (const dialog of dialogs) {
-    if (options?.unreadOnly && !dialog.isUnread) continue
+    if (options?.with && matchesFolder && !matchesFolder(dialog)) continue
+    const unread = isUnread(dialog)
+    if (options?.unreadOnly && !unread) continue
+    if (excludeRead && !unread && !explicitPeers.has(dialog.peer.id)) continue
 
     chats.push({
       id: String(dialog.peer.id),
       name: dialog.peer.displayName,
       type: dialog.peer.type,
       unreadCount: dialog.unreadCount,
-      isUnread: dialog.isUnread,
+      isUnread: unread,
       isManuallyUnread: dialog.isManuallyUnread,
       draft: dialog.draftMessage?.text ?? null,
       lastMessage: dialog.lastMessage?.text ?? null,
@@ -166,7 +221,7 @@ export async function unreadChats(options?: {
   for await (const dialog of iterDialogs(tg, {
     limit: options?.chatsLimit ?? 20,
   })) {
-    if (!dialog.isUnread) continue
+    if (!isUnread(dialog)) continue
 
     const unreadMessages: Array<{
       id: number

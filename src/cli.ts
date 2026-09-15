@@ -8,6 +8,7 @@ import {
   getMemberCount,
   listContacts,
   listChats,
+  listFolders,
   logout,
   leaveChatGroup,
   markRead,
@@ -99,10 +100,21 @@ cli.command('logout', {
   run: async () => logout(),
 })
 
+cli.command('folders', {
+  description: 'List Telegram chat folders by ID and title.',
+  run: async () => listFolders(),
+})
+
 cli.command('chats', {
   description: 'List recent chats and basic dialog metadata.',
   options: z
     .object({
+      folder: z
+        .string()
+        .optional()
+        .describe(
+          'Folder ID or exact title from "telegram folders". Numeric values are IDs',
+        ),
       with: z
         .string()
         .optional()
@@ -126,6 +138,10 @@ cli.command('chats', {
       path: ['all'],
     }),
   examples: [
+    {
+      options: { folder: 'Important', unreadOnly: true },
+      description: 'List unread chats in a folder',
+    },
     { description: 'List 20 recent chats' },
     { options: { unreadOnly: true }, description: 'Only list unread chats' },
     {
