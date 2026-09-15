@@ -1,9 +1,10 @@
-import { Chat } from '@mtcute/node'
+import { Chat, type Dialog } from '@mtcute/node'
 
 import {
   getChat,
   getChatMembers,
   getMe,
+  getPeerDialogs,
   iterDialogs,
   iterHistory,
   readHistory,
@@ -11,13 +12,19 @@ import {
 } from '@mtcute/node/methods.js'
 
 import { getClient } from './client.js'
-import { collectCommonChats } from './common-chats.js'
+import { iterCommonChats } from './common-chats.js'
 import { resolvePeer } from './resolve.js'
 
 export async function listChats(options?: {
   limit?: number
   unreadOnly?: boolean
+  with?: string
+  all?: boolean
 }) {
+  if (options?.all && options.limit !== undefined) {
+    throw new Error('--all cannot be combined with --limit.')
+  }
+  const limit = options?.all ? Infinity : (options?.limit ?? 20)
   const tg = await getClient()
   const chats: Array<{
     id: string
@@ -31,9 +38,11 @@ export async function listChats(options?: {
     lastMessageDate?: string | null
   }> = []
 
-  for await (const dialog of iterDialogs(tg, {
-    limit: options?.limit ?? 20,
-  })) {
+  const dialogs = options?.with
+    ? iterSharedDialogs(options.with, options.unreadOnly ? undefined : limit)
+    : iterDialogs(tg, { limit: options?.unreadOnly ? Infinity : limit })
+
+  for await (const dialog of dialogs) {
     if (options?.unreadOnly && !dialog.isUnread) continue
 
     chats.push({
@@ -47,6 +56,7 @@ export async function listChats(options?: {
       lastMessage: dialog.lastMessage?.text ?? null,
       lastMessageDate: dialog.lastMessage?.date?.toISOString() ?? null,
     })
+    if (chats.length >= limit) break
   }
 
   return {
@@ -206,40 +216,56 @@ export async function unreadChats(options?: {
   }
 }
 
-export async function commonChats(user: string, options?: { limit?: number }) {
+async function* iterSharedDialogs(
+  user: string,
+  limit?: number,
+): AsyncGenerator<Dialog> {
   const tg = await getClient()
   const peer = await resolvePeer(user)
-
   if (peer.type !== 'user') {
-    throw new Error(
-      'Common chats are only available for users. Pass a user ID, @username, or phone number.',
-    )
+    throw new Error('--with requires a user ID, @username, or phone number.')
   }
 
   const userId = await resolveUser(tg, peer.inputPeer)
-  const chats = await collectCommonChats(async ({ maxId, limit }) => {
-    const page = await tg.call({
-      _: 'messages.getCommonChats',
-      userId,
-      maxId,
-      limit,
-    })
-    return page.chats.map((chat) => new Chat(chat))
-  }, options)
-
-  return {
-    user: {
-      id: String(peer.id),
-      name: peer.displayName,
+  const shared = iterCommonChats(
+    async ({ maxId, limit }) => {
+      const page = await tg.call({
+        _: 'messages.getCommonChats',
+        userId,
+        maxId,
+        limit,
+      })
+      return page.chats.map((chat) => new Chat(chat))
     },
-    count: chats.length,
-    chats: chats.map((chat) => ({
-      id: String(chat.id),
-      title: chat.displayName,
-      type: chat.chatType,
-      username: chat.username ?? null,
-      membersCount: chat.membersCount,
-    })),
+    { limit: Number.isFinite(limit) ? limit : undefined },
+  )
+
+  // Fetch dialog metadata for shared peers directly, including groups outside
+  // the recent-dialog window. Hydrate in batches instead of one RPC per group.
+  let batch: Chat[] = []
+  for await (const chat of shared) {
+    batch.push(chat)
+    if (batch.length === 100) {
+      yield* hydrateSharedDialogs(batch)
+      batch = []
+    }
+  }
+  if (batch.length > 0) yield* hydrateSharedDialogs(batch)
+}
+
+async function* hydrateSharedDialogs(chats: Chat[]): AsyncGenerator<Dialog> {
+  const tg = await getClient()
+  const dialogs = await getPeerDialogs(
+    tg,
+    chats.map((chat) => chat.inputPeer),
+  )
+  for (const dialog of dialogs) {
+    if (!dialog) {
+      throw new Error(
+        'Unable to load a shared chat; results may be incomplete. Retry the command.',
+      )
+    }
+    yield dialog
   }
 }
 

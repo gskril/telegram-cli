@@ -4,7 +4,6 @@ import { Cli, z } from 'incur'
 import {
   addChatMembers,
   auth,
-  commonChats,
   createChatGroup,
   getMemberCount,
   listContacts,
@@ -24,13 +23,7 @@ import {
 } from './telegram.js'
 
 const NEGATIVE_CHAT_ID_PREFIX = 'tg-chat-id:'
-const CHAT_ARG_COMMANDS = new Set([
-  'read',
-  'mark-read',
-  'draft',
-  'send',
-  'common-chats',
-])
+const CHAT_ARG_COMMANDS = new Set(['read', 'mark-read', 'draft', 'send'])
 const GROUP_CHAT_ARG_COMMANDS = new Set(['add', 'remove', 'count', 'leave'])
 const LEGACY_GROUP_COMMAND_ALIASES = new Map<string, [string, string]>([
   ['create-group', ['group', 'create']],
@@ -108,23 +101,43 @@ cli.command('logout', {
 
 cli.command('chats', {
   description: 'List recent chats and basic dialog metadata.',
-  options: z.object({
-    limit: z.coerce
-      .number()
-      .min(1)
-      .default(20)
-      .describe('Maximum chats to return'),
-    unreadOnly: z.boolean().optional().describe('Only show unread chats'),
-  }),
-  examples: [
-    { description: 'List recent chats' },
-    { options: { unreadOnly: true }, description: 'Only list unread chats' },
-  ],
-  run: async (c) =>
-    listChats({
-      limit: c.options.limit,
-      unreadOnly: c.options.unreadOnly,
+  options: z
+    .object({
+      with: z
+        .string()
+        .optional()
+        .describe(
+          'Only groups shared with this user (@username, user ID, or phone number)',
+        ),
+      limit: z.coerce
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe('Maximum chats to return (default: 20)'),
+      all: z
+        .boolean()
+        .optional()
+        .describe('Return all matching chats; cannot be combined with --limit'),
+      unreadOnly: z.boolean().optional().describe('Only show unread chats'),
+    })
+    .refine((options) => !options.all || options.limit === undefined, {
+      message: '--all cannot be combined with --limit.',
+      path: ['all'],
     }),
+  examples: [
+    { description: 'List 20 recent chats' },
+    { options: { unreadOnly: true }, description: 'Only list unread chats' },
+    {
+      options: { with: '@durov' },
+      description: 'List up to 20 shared groups with a user',
+    },
+    {
+      options: { with: '@durov', all: true },
+      description: 'List all shared groups with a user',
+    },
+  ],
+  run: async (c) => listChats(c.options),
 })
 
 cli.command('contacts', {
@@ -180,37 +193,6 @@ cli.command('read', {
     },
   ],
   run: async (c) => readChat(c.args.chat, { limit: c.options.limit }),
-})
-
-cli.command('common-chats', {
-  description:
-    'List groups, supergroups, and channels you share with a given user. Useful for auditing shared group membership before offboarding a contact.',
-  args: z.object({
-    user: z
-      .string()
-      .describe(
-        'User ID, @username, or phone number. Use "telegram contacts" if you only have a rough name.',
-      ),
-  }),
-  options: z.object({
-    limit: z.coerce
-      .number()
-      .int()
-      .positive()
-      .optional()
-      .describe('Maximum shared chats to return; defaults to all shared chats'),
-  }),
-  examples: [
-    {
-      args: { user: '@durov' },
-      description: 'List common chats with a user by username',
-    },
-    {
-      args: { user: '500894395' },
-      description: 'List common chats with a user by numeric ID',
-    },
-  ],
-  run: async (c) => commonChats(c.args.user, { limit: c.options.limit }),
 })
 
 cli.command('resolve', {

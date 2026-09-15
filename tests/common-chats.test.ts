@@ -2,7 +2,13 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { Chat } from '@mtcute/node'
 
-import { collectCommonChats } from '../src/telegram/common-chats.js'
+import { iterCommonChats } from '../src/telegram/common-chats.js'
+
+async function collectCommonChats(...args: Parameters<typeof iterCommonChats>) {
+  const chats: Chat[] = []
+  for await (const chat of iterCommonChats(...args)) chats.push(chat)
+  return chats
+}
 
 const chat = (id: number) =>
   new Chat({ _: 'chatForbidden', id, title: `Group ${id}` })
@@ -95,4 +101,20 @@ test('rejects invalid limits before making a request', async () => {
       /positive safe integer/,
     )
   }
+})
+
+test('stops requesting pages when the consumer has enough matching chats', async () => {
+  let requests = 0
+  const shared = iterCommonChats(async () => {
+    requests++
+    return Array.from({ length: 100 }, (_, i) => chat(i + 1))
+  })
+  const matches: number[] = []
+  for await (const group of shared) {
+    if (group.raw.id <= 20) continue
+    matches.push(group.raw.id)
+    if (matches.length === 2) break
+  }
+  assert.deepEqual(matches, [21, 22])
+  assert.equal(requests, 1)
 })

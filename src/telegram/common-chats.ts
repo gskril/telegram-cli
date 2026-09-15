@@ -5,10 +5,10 @@ type CommonChatsPageLoader = (params: {
   limit: number
 }) => Promise<Chat[]>
 
-export async function collectCommonChats(
+export async function* iterCommonChats(
   loadPage: CommonChatsPageLoader,
   options?: { limit?: number },
-): Promise<Chat[]> {
+): AsyncGenerator<Chat> {
   const limit = options?.limit ?? Infinity
   if (
     options?.limit !== undefined &&
@@ -17,23 +17,24 @@ export async function collectCommonChats(
     throw new Error('Common chats limit must be a positive safe integer.')
   }
 
-  const chats: Chat[] = []
+  let count = 0
   const seen = new Set<number>()
   const cursors = new Set<number>([0])
   let maxId = 0
 
-  while (chats.length < limit) {
+  while (count < limit) {
     const page = await loadPage({
       maxId,
-      limit: Math.min(100, limit - chats.length),
+      limit: Math.min(100, limit - count),
     })
     if (page.length === 0) break
 
     for (const chat of page) {
       if (seen.has(chat.id)) continue
       seen.add(chat.id)
-      chats.push(chat)
-      if (chats.length === limit) return chats
+      count++
+      yield chat
+      if (count === limit) return
     }
 
     // Telegram expects the last raw ID, not mtcute's negative marked peer ID.
@@ -46,6 +47,4 @@ export async function collectCommonChats(
     }
     cursors.add(maxId)
   }
-
-  return chats
 }
