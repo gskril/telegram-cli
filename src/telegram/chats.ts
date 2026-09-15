@@ -1,14 +1,17 @@
+import { Chat } from '@mtcute/node'
+
 import {
   getChat,
   getChatMembers,
-  getCommonChats,
   getMe,
   iterDialogs,
   iterHistory,
   readHistory,
+  resolveUser,
 } from '@mtcute/node/methods.js'
 
 import { getClient } from './client.js'
+import { collectCommonChats } from './common-chats.js'
 import { resolvePeer } from './resolve.js'
 
 export async function listChats(options?: {
@@ -203,7 +206,7 @@ export async function unreadChats(options?: {
   }
 }
 
-export async function commonChats(user: string) {
+export async function commonChats(user: string, options?: { limit?: number }) {
   const tg = await getClient()
   const peer = await resolvePeer(user)
 
@@ -213,7 +216,16 @@ export async function commonChats(user: string) {
     )
   }
 
-  const chats = await getCommonChats(tg, peer.inputPeer)
+  const userId = await resolveUser(tg, peer.inputPeer)
+  const chats = await collectCommonChats(async ({ maxId, limit }) => {
+    const page = await tg.call({
+      _: 'messages.getCommonChats',
+      userId,
+      maxId,
+      limit,
+    })
+    return page.chats.map((chat) => new Chat(chat))
+  }, options)
 
   return {
     user: {

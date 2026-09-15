@@ -19,6 +19,7 @@ npx https://pkg.pr.new/gskril/telegram-cli/telegram@main
 - `whoami`: show the authenticated account and local session info
 - `logout`: clear the active local session
 - `chats`: list recent dialogs
+- `common-chats <user> [--limit <n>]`: list all shared groups with a user, fetching successive pages automatically. Use `--limit` to return at most that many chats; `count` is the number returned. Accepts the same user identifiers as `resolve`.
 - `contacts <query>`: search Telegram contacts live by name, username, or phone; use this before `send`/`draft` when you only have a rough name
 - `resolve <chat>`: resolve a username or chat target to its numeric Telegram ID
 - `read <chat>`: read recent messages from a dialog

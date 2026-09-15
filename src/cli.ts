@@ -192,6 +192,14 @@ cli.command('common-chats', {
         'User ID, @username, or phone number. Use "telegram contacts" if you only have a rough name.',
       ),
   }),
+  options: z.object({
+    limit: z.coerce
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe('Maximum shared chats to return; defaults to all shared chats'),
+  }),
   examples: [
     {
       args: { user: '@durov' },
@@ -202,7 +210,7 @@ cli.command('common-chats', {
       description: 'List common chats with a user by numeric ID',
     },
   ],
-  run: async (c) => commonChats(c.args.user),
+  run: async (c) => commonChats(c.args.user, { limit: c.options.limit }),
 })
 
 cli.command('resolve', {
