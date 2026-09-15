@@ -22,7 +22,7 @@ npx https://pkg.pr.new/gskril/telegram-cli/telegram@main
 - `chats [--with <user>] [--folder <id-or-title>] [--limit <n> | --all] [--unread-only]`: list up to 20 chats by default. `--with` fetches shared groups directly from Telegram, including those outside your recent chats, and can be combined with folder filtering. `--all` fetches every matching chat; `--limit` caps results after filtering. Shared groups use the same dialog metadata output as other chats. `count` is the number returned.
 - `contacts <query>`: search Telegram contacts live by name, username, or phone; use this before `send`/`draft` when you only have a rough name
 - `resolve <chat>`: resolve a username or chat target to its numeric Telegram ID
-- `read <chat>`: read recent messages from a dialog
+- `read <chat> [--limit <n>] [--cursor <cursor>]`: read a page of messages (default 20, maximum 100). Pass the response's `nextCursor` to fetch older messages; `null` means the end of accessible history. Each page lists messages oldest first.
 - `unread`: show unread chats with a small message preview
 - `mark-read <chat>`: mark a dialog as read
 - `draft <chat> --text <text>`: save a Telegram cloud text draft; use `--text ""` to clear the draft. Drafts are text-only — Telegram's API rejects media in drafts — so use `send --file` to deliver a file. If the target is a rough name, resolve it with `contacts` first
@@ -94,6 +94,7 @@ pnpm dev -- contacts @durov
 pnpm dev -- resolve @username
 pnpm dev -- group count -1001234567890
 pnpm dev -- read @username --limit 10
+pnpm dev -- read @username --limit 100 --cursor '<nextCursor from previous response>'
 pnpm dev -- draft 500894395 --text "I will reply later"
 pnpm dev -- draft 500894395 --text ""
 pnpm dev -- send 500894395 --text "hello there" --reply-to 42

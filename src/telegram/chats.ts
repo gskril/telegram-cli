@@ -14,6 +14,7 @@ import { getClient } from './client.js'
 import { iterCommonChats } from './common-chats.js'
 import { resolvePeer } from './resolve.js'
 import { resolveFolder } from './folders.js'
+import { decodeHistoryCursor, encodeHistoryCursor } from './history-cursor.js'
 
 function isUnread(dialog: { unreadCount: number; isManuallyUnread: boolean }) {
   // mtcute 0.32.0's isUnread incorrectly checks unreadCount > 1.
@@ -154,9 +155,20 @@ export async function getMemberCount(chat: string) {
   }
 }
 
-export async function readChat(chat: string, options?: { limit?: number }) {
+export async function readChat(
+  chat: string,
+  options?: { limit?: number; cursor?: string },
+) {
+  const limit = options?.limit ?? 20
+  const cursor =
+    options?.cursor === undefined
+      ? undefined
+      : decodeHistoryCursor(options.cursor)
   const tg = await getClient()
   const peer = await resolvePeer(chat)
+  if (cursor && cursor.chatId !== String(peer.id)) {
+    throw new Error('This history cursor belongs to a different chat.')
+  }
   const messages: Array<{
     id: number
     date: string
@@ -168,9 +180,18 @@ export async function readChat(chat: string, options?: { limit?: number }) {
     hasMedia: boolean
   }> = []
 
+  let nextCursor: string | null = null
+  let lastOffset: { id: number; date: number } | undefined
   for await (const message of iterHistory(tg, peer.inputPeer, {
-    limit: options?.limit ?? 20,
+    limit: limit + 1,
+    offset: cursor?.offset,
   })) {
+    // Look ahead without consuming that message in the next page's cursor.
+    if (messages.length === limit && lastOffset) {
+      nextCursor = encodeHistoryCursor(String(peer.id), lastOffset)
+      break
+    }
+    lastOffset = { id: message.id, date: message.raw.date }
     messages.push({
       id: message.id,
       date: message.date.toISOString(),
@@ -192,6 +213,7 @@ export async function readChat(chat: string, options?: { limit?: number }) {
       type: peer.type,
     },
     count: messages.length,
+    nextCursor,
     messages,
   }
 }

@@ -188,18 +188,23 @@ cli.command('contacts', {
 })
 
 cli.command('read', {
-  description: 'Read recent messages from a chat.',
-  hint: 'Prefer numeric chat IDs from "telegram chats"; usernames also work when Telegram can resolve them.',
+  description: 'Read a page of messages from a chat.',
+  hint: 'Prefer numeric chat IDs from "telegram chats"; usernames also work when Telegram can resolve them. Pass nextCursor as --cursor to read older messages; null means the end of history.',
   args: z.object({
     chat: z.string().describe(CHAT_TARGET_DESCRIPTION),
   }),
   options: z.object({
     limit: z.coerce
       .number()
+      .int()
       .min(1)
-      .max(200)
+      .max(100)
       .default(20)
-      .describe('Maximum messages to return'),
+      .describe('Maximum messages to return (1–100)'),
+    cursor: z
+      .string()
+      .optional()
+      .describe('Continuation cursor from the previous read response'),
   }),
   examples: [
     { args: { chat: '@durov' }, description: 'Read a username-based chat' },
@@ -208,7 +213,11 @@ cli.command('read', {
       description: 'Read a chat by numeric ID',
     },
   ],
-  run: async (c) => readChat(c.args.chat, { limit: c.options.limit }),
+  run: async (c) =>
+    readChat(c.args.chat, {
+      limit: c.options.limit,
+      cursor: c.options.cursor,
+    }),
 })
 
 cli.command('resolve', {
