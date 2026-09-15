@@ -19,7 +19,8 @@
   "scripts": {
     "build": "tsdown",
     "dev": "node --import tsx/esm src/cli.ts",
-    "check": "tsc --noEmit -p tsconfig.json",
+    "check": "tsc --noEmit -p tsconfig.json && tsc -p tsconfig.tests.json",
+    "test": "node --import tsx/esm --experimental-test-module-mocks --test tests/*.test.ts",
     "format": "prettier --write .",
     "prepack": "pnpm build",
     "pack:check": "npm --cache .npm-cache pack --json"

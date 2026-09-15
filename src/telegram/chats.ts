@@ -1,3 +1,4 @@
+import { getMarkedPeerId } from '@mtcute/node'
 import {
   getChat,
   getChatMembers,
@@ -9,12 +10,42 @@ import {
 
 import { getClient } from './client.js'
 import { resolvePeer } from './resolve.js'
+import { resolveFolder } from './folders.js'
+
+function isUnread(dialog: { unreadCount: number; isManuallyUnread: boolean }) {
+  // mtcute 0.32.0's isUnread incorrectly checks unreadCount > 1.
+  return dialog.unreadCount > 0 || Boolean(dialog.isManuallyUnread)
+}
 
 export async function listChats(options?: {
   limit?: number
   unreadOnly?: boolean
+  folder?: string
 }) {
   const tg = await getClient()
+  const folder =
+    options?.folder === undefined
+      ? undefined
+      : await resolveFolder(options.folder)
+  const limit = options?.limit ?? 20
+  // Normalize shared folders to the equivalent explicit-peer filter. mtcute's
+  // InputDialogFolder type does not accept the shared-folder constructor.
+  const dialogFolder =
+    folder?._ === 'dialogFilterDefault'
+      ? undefined
+      : folder?._ === 'dialogFilterChatlist'
+        ? { ...folder, _: 'dialogFilter' as const, excludePeers: [] }
+        : folder
+  // Apply excludeRead ourselves to include single-unread-message dialogs,
+  // while preserving Telegram's explicit inclusion/pinning overrides.
+  const excludeRead = folder?._ === 'dialogFilter' && folder.excludeRead
+  const explicitPeers = new Set(
+    folder && folder._ !== 'dialogFilterDefault'
+      ? [...folder.includePeers, ...folder.pinnedPeers].map((peer) =>
+          getMarkedPeerId(peer),
+        )
+      : [],
+  )
   const chats: Array<{
     id: string
     name: string
@@ -28,21 +59,28 @@ export async function listChats(options?: {
   }> = []
 
   for await (const dialog of iterDialogs(tg, {
-    limit: options?.limit ?? 20,
+    folder:
+      excludeRead && dialogFolder?._ === 'dialogFilter'
+        ? { ...dialogFolder, excludeRead: false }
+        : dialogFolder,
+    limit: options?.unreadOnly || excludeRead ? Infinity : limit,
   })) {
-    if (options?.unreadOnly && !dialog.isUnread) continue
+    const unread = isUnread(dialog)
+    if (options?.unreadOnly && !unread) continue
+    if (excludeRead && !unread && !explicitPeers.has(dialog.peer.id)) continue
 
     chats.push({
       id: String(dialog.peer.id),
       name: dialog.peer.displayName,
       type: dialog.peer.type,
       unreadCount: dialog.unreadCount,
-      isUnread: dialog.isUnread,
+      isUnread: unread,
       isManuallyUnread: dialog.isManuallyUnread,
       draft: dialog.draftMessage?.text ?? null,
       lastMessage: dialog.lastMessage?.text ?? null,
       lastMessageDate: dialog.lastMessage?.date?.toISOString() ?? null,
     })
+    if (chats.length >= limit) break
   }
 
   return {
@@ -152,7 +190,7 @@ export async function unreadChats(options?: {
   for await (const dialog of iterDialogs(tg, {
     limit: options?.chatsLimit ?? 20,
   })) {
-    if (!dialog.isUnread) continue
+    if (!isUnread(dialog)) continue
 
     const unreadMessages: Array<{
       id: number
