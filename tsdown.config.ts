@@ -5,6 +5,7 @@ export default defineConfig({
   dts: false,
   entry: ['src/cli.ts'],
   format: 'esm',
+  minify: true,
   outDir: 'dist',
   platform: 'node',
   sourcemap: false,
