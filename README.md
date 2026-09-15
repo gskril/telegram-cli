@@ -18,7 +18,8 @@ npx https://pkg.pr.new/gskril/telegram-cli/telegram@main
 - `setup`: interactively store `TELEGRAM_API_ID` and `TELEGRAM_API_HASH`
 - `whoami`: show the authenticated account and local session info
 - `logout`: clear the active local session
-- `chats`: list recent dialogs
+- `folders`: list chat folder IDs and titles
+- `chats [--folder <id-or-title>] [--unread-only] [--limit <number>]`: list recent dialogs; the limit counts matching chats after filtering
 - `contacts <query>`: search Telegram contacts live by name, username, or phone; use this before `send`/`draft` when you only have a rough name
 - `resolve <chat>`: resolve a username or chat target to its numeric Telegram ID
 - `read <chat>`: read recent messages from a dialog
@@ -82,6 +83,9 @@ pnpm dev -- setup
 pnpm dev -- auth
 pnpm dev -- whoami
 pnpm dev -- chats --unread-only
+pnpm dev -- folders
+pnpm dev -- chats --folder Important --unread-only
+pnpm dev -- chats --folder 2 --limit 50
 pnpm dev -- contacts pavel
 pnpm dev -- contacts @durov
 pnpm dev -- resolve @username
@@ -105,6 +109,8 @@ pnpm dev -- group leave -1001234567890
 ```
 
 ## Notes
+
+- `chats --folder` accepts a numeric folder ID or an exact, case-sensitive title. Duplicate titles require an ID; numeric selectors are always IDs. Folder rules include automatic categories, exclusions, and pinned chats. Folder filtering and unread-only searches may scan many dialogs to find the requested number of matches.
 
 - This CLI targets a personal Telegram account, not bot-token auth.
 - `auth --read-only` enables a local guard that blocks write commands such as `send`, `group create`, `group add`, `group remove`, and `group leave`, so read-only agent flows can't accidentally fire writes. Telegram's MTProto does not support scoped user sessions, so this is a CLI-layer check only: the stored session file itself still has full account access, and anything that uses the session file outside this CLI bypasses the guard. `auth` without the flag (or `logout`) clears the marker.

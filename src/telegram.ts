@@ -10,6 +10,7 @@ export { auth, logout, whoAmI } from './telegram/auth.js'
 export type { ResolvedPeer, ResolvedTarget } from './telegram/resolve.js'
 export { resolvePeer, resolveTarget } from './telegram/resolve.js'
 export { listContacts } from './telegram/contacts.js'
+export { listFolders } from './telegram/folders.js'
 export {
   getMemberCount,
   listChats,
