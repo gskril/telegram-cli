@@ -18,7 +18,7 @@ npx https://pkg.pr.new/gskril/telegram-cli/telegram@main
 - `setup`: interactively store `TELEGRAM_API_ID` and `TELEGRAM_API_HASH`
 - `whoami`: show the authenticated account and local session info
 - `logout`: clear the active local session
-- `folders`: list chat folder IDs and titles (without computing chat counts)
+- `folders`: list chat folder IDs and titles
 - `chats [--folder <id-or-title>] [--unread-only] [--limit <number>]`: list recent dialogs; the limit counts matching chats after filtering
 - `contacts <query>`: search Telegram contacts live by name, username, or phone; use this before `send`/`draft` when you only have a rough name
 - `resolve <chat>`: resolve a username or chat target to its numeric Telegram ID
