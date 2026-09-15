@@ -1,14 +1,17 @@
-import { getMarkedPeerId } from '@mtcute/node'
+import { Chat, Dialog, getMarkedPeerId } from '@mtcute/node'
 import {
   getChat,
   getChatMembers,
   getMe,
+  getPeerDialogs,
   iterDialogs,
   iterHistory,
   readHistory,
+  resolveUser,
 } from '@mtcute/node/methods.js'
 
 import { getClient } from './client.js'
+import { iterCommonChats } from './common-chats.js'
 import { resolvePeer } from './resolve.js'
 import { resolveFolder } from './folders.js'
 
@@ -20,14 +23,19 @@ function isUnread(dialog: { unreadCount: number; isManuallyUnread: boolean }) {
 export async function listChats(options?: {
   limit?: number
   unreadOnly?: boolean
+  with?: string
+  all?: boolean
   folder?: string
 }) {
+  if (options?.all && options.limit !== undefined) {
+    throw new Error('--all cannot be combined with --limit.')
+  }
+  const limit = options?.all ? Infinity : (options?.limit ?? 20)
   const tg = await getClient()
   const folder =
     options?.folder === undefined
       ? undefined
       : await resolveFolder(options.folder)
-  const limit = options?.limit ?? 20
   // Normalize shared folders to the equivalent explicit-peer filter. mtcute's
   // InputDialogFolder type does not accept the shared-folder constructor.
   const dialogFolder =
@@ -58,13 +66,36 @@ export async function listChats(options?: {
     lastMessageDate?: string | null
   }> = []
 
-  for await (const dialog of iterDialogs(tg, {
-    folder:
-      excludeRead && dialogFolder?._ === 'dialogFilter'
-        ? { ...dialogFolder, excludeRead: false }
-        : dialogFolder,
-    limit: options?.unreadOnly || excludeRead ? Infinity : limit,
-  })) {
+  const effectiveFolder =
+    excludeRead && dialogFolder?._ === 'dialogFilter'
+      ? { ...dialogFolder, excludeRead: false }
+      : dialogFolder
+  // The folder iterator handles pinned chats separately. When filtering shared
+  // dialogs directly, include pinned peers explicitly to preserve that behavior.
+  const matchesFolder = effectiveFolder
+    ? Dialog.filterFolder(
+        {
+          ...effectiveFolder,
+          includePeers: [
+            ...effectiveFolder.includePeers,
+            ...effectiveFolder.pinnedPeers,
+          ],
+        },
+        false,
+      )
+    : undefined
+  const dialogs = options?.with
+    ? iterSharedDialogs(
+        options.with,
+        options.unreadOnly || effectiveFolder ? undefined : limit,
+      )
+    : iterDialogs(tg, {
+        folder: effectiveFolder,
+        limit: options?.unreadOnly || excludeRead ? Infinity : limit,
+      })
+
+  for await (const dialog of dialogs) {
+    if (options?.with && matchesFolder && !matchesFolder(dialog)) continue
     const unread = isUnread(dialog)
     if (options?.unreadOnly && !unread) continue
     if (excludeRead && !unread && !explicitPeers.has(dialog.peer.id)) continue
@@ -237,6 +268,59 @@ export async function unreadChats(options?: {
   return {
     count: results.length,
     chats: results,
+  }
+}
+
+async function* iterSharedDialogs(
+  user: string,
+  limit?: number,
+): AsyncGenerator<Dialog> {
+  const tg = await getClient()
+  const peer = await resolvePeer(user)
+  if (peer.type !== 'user') {
+    throw new Error('--with requires a user ID, @username, or phone number.')
+  }
+
+  const userId = await resolveUser(tg, peer.inputPeer)
+  const shared = iterCommonChats(
+    async ({ maxId, limit }) => {
+      const page = await tg.call({
+        _: 'messages.getCommonChats',
+        userId,
+        maxId,
+        limit,
+      })
+      return page.chats.map((chat) => new Chat(chat))
+    },
+    { limit: Number.isFinite(limit) ? limit : undefined },
+  )
+
+  // Fetch dialog metadata for shared peers directly, including groups outside
+  // the recent-dialog window. Hydrate in batches instead of one RPC per group.
+  let batch: Chat[] = []
+  for await (const chat of shared) {
+    batch.push(chat)
+    if (batch.length === 100) {
+      yield* hydrateSharedDialogs(batch)
+      batch = []
+    }
+  }
+  if (batch.length > 0) yield* hydrateSharedDialogs(batch)
+}
+
+async function* hydrateSharedDialogs(chats: Chat[]): AsyncGenerator<Dialog> {
+  const tg = await getClient()
+  const dialogs = await getPeerDialogs(
+    tg,
+    chats.map((chat) => chat.inputPeer),
+  )
+  for (const dialog of dialogs) {
+    if (!dialog) {
+      throw new Error(
+        'Unable to load a shared chat; results may be incomplete. Retry the command.',
+      )
+    }
+    yield dialog
   }
 }
 

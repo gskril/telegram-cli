@@ -19,7 +19,7 @@ npx https://pkg.pr.new/gskril/telegram-cli/telegram@main
 - `whoami`: show the authenticated account and local session info
 - `logout`: clear the active local session
 - `folders`: list chat folder IDs and titles
-- `chats [--folder <id-or-title>] [--unread-only] [--limit <number>]`: list recent dialogs; the limit counts matching chats after filtering
+- `chats [--with <user>] [--folder <id-or-title>] [--limit <n> | --all] [--unread-only]`: list up to 20 chats by default. `--with` fetches shared groups directly from Telegram, including those outside your recent chats, and can be combined with folder filtering. `--all` fetches every matching chat; `--limit` caps results after filtering. Shared groups use the same dialog metadata output as other chats. `count` is the number returned.
 - `contacts <query>`: search Telegram contacts live by name, username, or phone; use this before `send`/`draft` when you only have a rough name
 - `resolve <chat>`: resolve a username or chat target to its numeric Telegram ID
 - `read <chat>`: read recent messages from a dialog
@@ -83,6 +83,9 @@ pnpm dev -- setup
 pnpm dev -- auth
 pnpm dev -- whoami
 pnpm dev -- chats --unread-only
+pnpm dev -- chats --with @username
+pnpm dev -- chats --with @username --all
+pnpm dev -- chats --with @username --unread-only --limit 25
 pnpm dev -- folders
 pnpm dev -- chats --folder Important --unread-only
 pnpm dev -- chats --folder 2 --limit 50

@@ -107,35 +107,53 @@ cli.command('folders', {
 
 cli.command('chats', {
   description: 'List recent chats and basic dialog metadata.',
-  options: z.object({
-    limit: z.coerce
-      .number()
-      .int()
-      .min(1)
-      .default(20)
-      .describe('Maximum chats to return'),
-    unreadOnly: z.boolean().optional().describe('Only show unread chats'),
-    folder: z
-      .string()
-      .optional()
-      .describe(
-        'Folder ID or exact title from "telegram folders". Numeric values are IDs',
-      ),
-  }),
+  options: z
+    .object({
+      folder: z
+        .string()
+        .optional()
+        .describe(
+          'Folder ID or exact title from "telegram folders". Numeric values are IDs',
+        ),
+      with: z
+        .string()
+        .optional()
+        .describe(
+          'Only groups shared with this user (@username, user ID, or phone number)',
+        ),
+      limit: z.coerce
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe('Maximum chats to return (default: 20)'),
+      all: z
+        .boolean()
+        .optional()
+        .describe('Return all matching chats; cannot be combined with --limit'),
+      unreadOnly: z.boolean().optional().describe('Only show unread chats'),
+    })
+    .refine((options) => !options.all || options.limit === undefined, {
+      message: '--all cannot be combined with --limit.',
+      path: ['all'],
+    }),
   examples: [
-    { description: 'List recent chats' },
-    { options: { unreadOnly: true }, description: 'Only list unread chats' },
     {
       options: { folder: 'Important', unreadOnly: true },
       description: 'List unread chats in a folder',
     },
+    { description: 'List 20 recent chats' },
+    { options: { unreadOnly: true }, description: 'Only list unread chats' },
+    {
+      options: { with: '@durov' },
+      description: 'List up to 20 shared groups with a user',
+    },
+    {
+      options: { with: '@durov', all: true },
+      description: 'List all shared groups with a user',
+    },
   ],
-  run: async (c) =>
-    listChats({
-      limit: c.options.limit,
-      unreadOnly: c.options.unreadOnly,
-      folder: c.options.folder,
-    }),
+  run: async (c) => listChats(c.options),
 })
 
 cli.command('contacts', {
